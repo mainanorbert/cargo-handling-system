@@ -2,10 +2,12 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\Movements\MovementResource;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -19,6 +21,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+
+use function Filament\Support\original_request;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -38,6 +42,20 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
+            ->navigationItems([
+                NavigationItem::make('Record vessel discharge')
+                    ->group('Cargo workflow')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->sort(4)
+                    ->isActiveWhen(fn (): bool => original_request()->routeIs(MovementResource::getRouteBaseName().'.vessel-discharge'))
+                    ->url(fn (): string => MovementResource::getUrl('vessel-discharge')),
+                NavigationItem::make('Record truck delivery')
+                    ->group('Cargo workflow')
+                    ->icon('heroicon-o-truck')
+                    ->sort(5)
+                    ->isActiveWhen(fn (): bool => original_request()->routeIs(MovementResource::getRouteBaseName().'.truck-delivery'))
+                    ->url(fn (): string => MovementResource::getUrl('truck-delivery')),
+            ])
             ->pages([
                 Dashboard::class,
             ])

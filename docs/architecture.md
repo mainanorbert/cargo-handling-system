@@ -1,3 +1,5 @@
+> Design reference: this document describes the broader target architecture, including proposed ingestion and queue components. See the README for the current implementation, supported replay behavior, test commands, and remaining limitations.
+
 ## 1. Purpose and scope
 
 Build a Laravel and FilamentPHP cargo-handling application for Bulkstream's assessment. It records the movement of bulk liquid cargo from a vessel to a shore tank and from a tank to a truck. The core must enforce tank capacity, apply a 0.5% inbound transit loss, process source events in timestamp order and protect balances from concurrent operations.

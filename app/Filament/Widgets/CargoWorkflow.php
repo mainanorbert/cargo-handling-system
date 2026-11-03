@@ -21,9 +21,9 @@ class CargoWorkflow extends Widget
     {
         return [
             'shipmentUrl' => ShipmentResource::getUrl('index', ['action' => 'create']),
-            'dischargeUrl' => MovementResource::getUrl('index', ['action' => 'inbound']),
+            'dischargeUrl' => MovementResource::getUrl('vessel-discharge'),
             'tankUrl' => TankResource::getUrl(),
-            'deliveryUrl' => MovementResource::getUrl('index', ['action' => 'outbound']),
+            'deliveryUrl' => MovementResource::getUrl('truck-delivery'),
         ];
     }
 }

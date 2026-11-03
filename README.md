@@ -17,9 +17,9 @@ In the local environment the seeder creates `demo@example.com` with password `pa
 ## Walkthrough
 
 1. In **Inbound shipments**, create a shipment at its point of origin with a reference, vessel, commodity, and expected litres. This does not add stock.
-2. In **Cargo movements**, choose **Record vessel discharge**, select the shipment and tank, and enter the actual discharged litres, event time, and unique event reference. The preview estimates loss and balance; the server checks the current balance again on submission. The demo shipment of 100,000 L yields 99,500 L and fits in Tank A.
-3. Review tank balances and utilisation on the dashboard or in **Tanks**. In **Cargo movements**, choose **Record truck delivery**, select a tank and truck, and enter the actual litres delivered.
-4. Search movement history by event or shipment reference. Late events are labelled **Needs review** and do not change stock.
+2. Open **Record vessel discharge** from the sidebar and click its **Record vessel discharge** button. Select the shipment and tank and enter the actual discharged litres and event time. The event reference is generated automatically and remains stable when retrying the form after validation errors. The preview estimates loss and balance; the server checks the current balance again on submission. The demo shipment of 100,000 L yields 99,500 L and fits in Tank A.
+3. Review tank balances and utilisation on the dashboard or in **Tanks**. Open **Record truck delivery** from the sidebar and click its **Record truck delivery** button. Select a tank and truck and enter the actual litres delivered.
+4. Each recording page shows its own searchable movement table with 10, 25, or 50 rows per page. **Cargo movements** shows the combined history. Valid late events are applied after the complete tank timeline is checked; an invalid historical capacity, stock, or commodity transition is rejected with no balance changes.
 
 Manage vessels, trucks, commodities, tanks and shipments from their labelled sections. Shipment editing and deletion are disabled once a movement references it; movement history is immutable. Referenced records cannot be deleted due to database constraints.
 
@@ -27,8 +27,19 @@ Manage vessels, trucks, commodities, tanks and shipments from their labelled sec
 
 Quantities are stored as integer millilitres. The specified 0.5% mass-loss rate is applied to volume as an assessment simplification, not a physical conversion; loss is rounded to the nearest millilitre, with halves rounded up. No density or temperature conversion is implied. A tank is assumed to contain one commodity at a time. CPO is marked as requiring temperature control, but no physical monitoring or control integration is provided.
 
-The service validates each event in a transaction, locks the tank before checking stock, and records a unique event reference. Applied movements are ordered by event time and, for ties, by event reference. An event that sorts before an already applied event is recorded for operator review without changing stock. Automatic replay and a review-resolution workflow are not implemented; operators must investigate and use a controlled external correction process. Events are processed on entry rather than queued and sorted as a batch. A late outbound event cannot be registered against a currently empty tank because its commodity cannot be inferred. Failed validation is shown to the operator and is not retained as an event. The movement observer writes a log entry after commit. There are no role-specific permissions: every authenticated panel user has access to all operations.
+`CargoService::record()` processes a single event; `recordBatch()` accepts a batch of source events, including shuffled events. Both lock all affected tank rows in ascending ID order inside one transaction, sort the complete applied history plus the incoming events by occurrence time and then by bytewise event-reference order, and validate every historical capacity, stock and commodity transition before persisting any changes. Times are normalized to the application timezone (UTC by default) at whole-second precision. For tied timestamps the reference defines a deterministic order, not a claim about physical sequence.
+
+New tanks start empty. Replay reconstructs stock from recorded movement quantities and does not recalculate existing losses or rewrite historical movements. A valid late event is appended with its original event time and current receipt time. A late delivery gets its commodity from the historical tank contents. Any conflict rejects the entire operation or batch. A mismatch between the current balance and its applied history also blocks processing. Unique event references prevent duplicate application; callers must retain their source identifier when retrying. Duplicate submissions are rejected, including database uniqueness races across different tanks.
+
+The existing `needs_review` records from earlier versions remain excluded from applied stock and require operator investigation; this change does not automatically apply them. Rejected input is shown to the operator and is not retained as a separate failed-event record. There is no queue consumer or external ingestion endpoint yet: integrations can call the service with stable source identifiers. Full replay reads a tank's applied history on each operation, which favors assessment correctness over throughput for very large histories. The movement observer writes a log entry after commit. Every authenticated panel user has access to all operations.
+
 
 ## Tests
 
-Run `php artisan test --compact` with the SQLite PDO extension installed. To exercise PostgreSQL, use a dedicated empty test database and override the PHPUnit database settings for that connection. SQLite does not prove PostgreSQL row-lock behaviour; concurrent worker tests are not yet supplied. Format PHP with `vendor/bin/pint --dirty --format agent`.
+Run `php artisan test --compact` with the SQLite PDO extension installed for the normal workflow tests. The concurrency suite requires PostgreSQL and the PHP `pcntl` and `posix` extensions; it skips on SQLite. Use a dedicated disposable PostgreSQL database, because these tests migrate and reset it:
+
+```sh
+DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=cargo_test DB_USERNAME=cargo_test DB_URL='' vendor/bin/phpunit tests/Feature/CargoWorkflowTest.php tests/Feature/CargoTimelineTest.php tests/Feature/CargoConcurrencyTest.php
+```
+
+Supply the test database password through your local environment. The concurrency tests use separate processes and connections, hold competing workers at actual PostgreSQL row locks, and verify inbound capacity, outbound stock allocation, and duplicate-event rollback. Format PHP with `vendor/bin/pint --dirty --format agent`.
