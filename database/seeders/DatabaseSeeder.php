@@ -2,24 +2,29 @@
 
 namespace Database\Seeders;
 
+use App\Models\Commodity;
+use App\Models\Shipment;
+use App\Models\Tank;
+use App\Models\Truck;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Vessel;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        foreach ([['CPO', 'Crude Palm Oil', true], ['CPOL', 'Crude Palm Olein', false], ['PFAD', 'Palm Fatty Acid Distillate', false]] as [$code, $description, $control]) {
+            Commodity::updateOrCreate(['code' => $code], ['description' => $description, 'requires_temperature_control' => $control]);
+        }
+        $vessel = Vessel::firstOrCreate(['name' => 'MV Palm Star']);
+        Truck::firstOrCreate(['registration' => 'KAA 123A']);
+        Tank::firstOrCreate(['name' => 'Tank A'], ['capacity_ml' => 100000000]);
+        Tank::firstOrCreate(['name' => 'Tank B'], ['capacity_ml' => 200000000]);
+        Shipment::firstOrCreate(['reference' => 'SHIP-DEMO-001'], ['origin' => 'Port of origin', 'vessel_id' => $vessel->id, 'commodity_id' => Commodity::where('code', 'CPO')->firstOrFail()->id, 'expected_ml' => 100000000]);
+        if (app()->environment('local', 'testing')) {
+            User::firstOrCreate(['email' => 'demo@example.com'], ['name' => 'Demo Operator', 'password' => Hash::make('password')]);
+        }
     }
 }

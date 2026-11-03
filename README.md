@@ -1,58 +1,34 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Bulkstream Cargo Handling System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+An authenticated Laravel 13 / Filament 5 application for registering inbound shipments, recording vessel discharges into shore tanks, and recording truck deliveries.
 
-## About Laravel
+## Setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Requires PHP 8.5 with the extensions required by Laravel, Composer, Node.js, and PostgreSQL. PostgreSQL is recommended for production because stock processing relies on row locks. Install dependencies with `composer install` and `npm install`, copy `.env.example` to `.env`, set `APP_KEY` with `php artisan key:generate`, and configure the PostgreSQL connection in `.env`. Then run:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```sh
+php artisan migrate --seed
+npm run build
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+In the local environment the seeder creates `demo@example.com` with password `password`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Create a production operator with `php artisan make:filament-user`. Never use the demo credentials in production.
 
-## Contributing
+## Walkthrough
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. In **Inbound shipments**, create a shipment at its point of origin with a reference, vessel, commodity, and expected litres. This does not add stock.
+2. In **Cargo movements**, choose **Record vessel discharge**, select the shipment and tank, and enter the actual discharged litres, event time, and unique event reference. The preview estimates loss and balance; the server checks the current balance again on submission. The demo shipment of 100,000 L yields 99,500 L and fits in Tank A.
+3. Review tank balances and utilisation on the dashboard or in **Tanks**. In **Cargo movements**, choose **Record truck delivery**, select a tank and truck, and enter the actual litres delivered.
+4. Search movement history by event or shipment reference. Late events are labelled **Needs review** and do not change stock.
 
-## Code of Conduct
+Manage vessels, trucks, commodities, tanks and shipments from their labelled sections. Shipment editing and deletion are disabled once a movement references it; movement history is immutable. Referenced records cannot be deleted due to database constraints.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Rules and limitations
 
-## Security Vulnerabilities
+Quantities are stored as integer millilitres. The specified 0.5% mass-loss rate is applied to volume as an assessment simplification, not a physical conversion; loss is rounded to the nearest millilitre, with halves rounded up. No density or temperature conversion is implied. A tank is assumed to contain one commodity at a time. CPO is marked as requiring temperature control, but no physical monitoring or control integration is provided.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+The service validates each event in a transaction, locks the tank before checking stock, and records a unique event reference. Applied movements are ordered by event time and, for ties, by event reference. An event that sorts before an already applied event is recorded for operator review without changing stock. Automatic replay and a review-resolution workflow are not implemented; operators must investigate and use a controlled external correction process. Events are processed on entry rather than queued and sorted as a batch. A late outbound event cannot be registered against a currently empty tank because its commodity cannot be inferred. Failed validation is shown to the operator and is not retained as an event. The movement observer writes a log entry after commit. There are no role-specific permissions: every authenticated panel user has access to all operations.
 
-## License
+## Tests
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Run `php artisan test --compact` with the SQLite PDO extension installed. To exercise PostgreSQL, use a dedicated empty test database and override the PHPUnit database settings for that connection. SQLite does not prove PostgreSQL row-lock behaviour; concurrent worker tests are not yet supplied. Format PHP with `vendor/bin/pint --dirty --format agent`.

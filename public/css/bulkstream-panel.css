@@ -1,0 +1,24 @@
+/* Provisional Bulkstream palette: deep teal, teal, white, light grey and dark grey. */
+.fi-body { background: #f4f6f6; color: #263238; }
+.fi-topbar, .fi-sidebar-header { border-top: 4px solid #004d4d; }
+.fi-logo { color: #004d4d; font-weight: 800; letter-spacing: -.03em; }
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn { background: #e0efed; }
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label { color: #004d4d; }
+.cargo-workflow { overflow: hidden; border: 1px solid #dce6e5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 4px #004d4d0d; }
+.cargo-workflow__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1.6rem; }
+.cargo-workflow__intro h2 { font-size: 1.5rem; font-weight: 700; line-height: 1.2; margin: .35rem 0 .5rem; }
+.cargo-workflow__intro p:not(.cargo-workflow__eyebrow) { color: #daeeee; font-size: .875rem; line-height: 1.5; max-width: 42rem; }
+.cargo-workflow__eyebrow { color: #bce4df; font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.cargo-workflow__tag { flex-shrink: 0; border: 1px solid #78aaa6; border-radius: 999px; padding: .35rem .7rem; color: #e1f2ef; font-size: .7rem; font-weight: 600; }
+.cargo-workflow__steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cargo-workflow__step { display: flex; flex-direction: column; align-items: flex-start; gap: .65rem; padding: 1.35rem; border-right: 1px solid #e3eceb; }
+.cargo-workflow__step:last-child { border-right: 0; }
+.cargo-workflow__number { color: #008080; font-size: .8rem; font-weight: 800; letter-spacing: .04em; }
+.cargo-workflow__number span { margin-left: .3rem; color: #556b6b; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+.cargo-workflow__step h3 { color: #004d4d; font-size: 1rem; font-weight: 700; }
+.cargo-workflow__step p { flex: 1; color: #536364; font-size: .8rem; line-height: 1.5; }
+.cargo-workflow__step a { display: inline-flex; align-items: center; gap: .5rem; margin-top: .5rem; color: #006868; font-size: .8rem; font-weight: 700; text-decoration: underline; text-underline-offset: .2rem; }
+.cargo-workflow__step a:hover { color: #004d4d; }
+.cargo-workflow__step a:focus-visible { outline: 3px solid #008080; outline-offset: 4px; }
+@media (max-width: 1100px) { .cargo-workflow__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cargo-workflow__step:nth-child(2) { border-right: 0; } .cargo-workflow__step:nth-child(-n+2) { border-bottom: 1px solid #e3eceb; } }
+@media (max-width: 600px) { .cargo-workflow__intro { flex-direction: column; } .cargo-workflow__steps { grid-template-columns: 1fr; } .cargo-workflow__step { border-right: 0; border-bottom: 1px solid #e3eceb; } .cargo-workflow__step:last-child { border-bottom: 0; } }
