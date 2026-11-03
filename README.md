@@ -14,6 +14,19 @@ php artisan serve
 
 In the local environment the seeder creates `demo@example.com` with password `password`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Create a production operator with `php artisan make:filament-user`. Never use the demo credentials in production.
 
+## Deploy to Render
+
+The root `render.yaml` provisions a Docker web service and PostgreSQL database in Render's Frankfurt region. In Render, choose **New → Blueprint**, connect this repository, and select its deployment branch. When prompted, provide:
+
+- `APP_KEY`: output from `php artisan key:generate --show`
+- `ADMIN_NAME`: the first production operator's name
+- `ADMIN_EMAIL`: the first production operator's email address
+- `ADMIN_PASSWORD`: a unique password of at least eight characters
+
+The first deployment migrates and seeds the database, then creates that operator. Later pushes to the connected branch automatically rebuild and deploy the root `Dockerfile`; startup runs outstanding migrations before Apache begins serving the application. Render supplies `APP_URL` through `RENDER_EXTERNAL_URL`, and the container listens on Render's `PORT`. The `/up` endpoint is used for health checks.
+
+The Blueprint uses Render's free web and PostgreSQL plans for demonstration. Free PostgreSQL databases expire after 30 days; choose paid plans for a durable deployment. Container-local files are ephemeral, so configure durable object storage before adding user uploads.
+
 ## Walkthrough
 
 1. In **Inbound shipments**, create a shipment at its point of origin with a reference, vessel, commodity, and expected litres. This does not add stock.

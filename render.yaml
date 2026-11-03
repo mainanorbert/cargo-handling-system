@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: bulkstream-cargo-handling-system
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: commit
+    healthCheckPath: /up
+    initialDeployHook: >-
+      php artisan db:seed --force &&
+      php artisan make:filament-user --no-interaction
+      --name="$ADMIN_NAME"
+      --email="$ADMIN_EMAIL"
+      --password="$ADMIN_PASSWORD"
+    envVars:
+      - key: APP_NAME
+        value: Bulkstream Cargo Handling System
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: bulkstream-cargo-db
+          property: connectionString
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_SECURE_COOKIE
+        value: "true"
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: bulkstream-cargo-db
+    plan: free
+    region: frankfurt
+    databaseName: bulkstream_cargo
+    user: bulkstream_cargo
