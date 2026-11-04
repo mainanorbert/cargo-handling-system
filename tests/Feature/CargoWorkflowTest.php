@@ -16,6 +16,7 @@ use App\Models\Truck;
 use App\Models\User;
 use App\Models\Vessel;
 use App\Services\CargoService;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -320,6 +321,24 @@ class CargoWorkflowTest extends TestCase
             $page->set('tableRecordsPerPage', 25)
                 ->assertCanSeeTableRecords($records)
                 ->assertCanNotSeeTableRecords($otherRecords);
+        }
+    }
+
+    public function test_movement_tables_show_details_in_a_view_modal(): void
+    {
+        [$shipment, $tank, $truck] = $this->setupCargo();
+        $inbound = $this->inbound($shipment, $tank, 'INBOUND', '1000');
+        $outbound = app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'OUTBOUND', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00']);
+        $this->actingAs(User::factory()->create());
+
+        foreach ([RecordVesselDischarge::class => $inbound, RecordTruckDelivery::class => $outbound] as $pageClass => $movement) {
+            Livewire::test($pageClass)
+                ->assertActionExists(TestAction::make('view')->table($movement))
+                ->mountAction(TestAction::make('view')->table($movement))
+                ->assertMountedActionModalSee('Movement details')
+                ->assertMountedActionModalSee('Source quantity (L)')
+                ->assertMountedActionModalSee('Loss rate')
+                ->assertMountedActionModalSee('Recorded at');
         }
     }
 }

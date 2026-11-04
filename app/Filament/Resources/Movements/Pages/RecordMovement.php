@@ -78,7 +78,7 @@ abstract class RecordMovement extends ManageRecords
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('type', $this->getMovementType()))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('type', $this->getMovementType())->with(['shipment', 'truck', 'tank', 'commodity']))
             ->paginationPageOptions([10, 25, 50])
             ->defaultPaginationPageOption(10);
     }
