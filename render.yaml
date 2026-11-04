@@ -8,12 +8,7 @@ services:
     dockerContext: .
     autoDeployTrigger: commit
     healthCheckPath: /up
-    initialDeployHook: >-
-      php artisan db:seed --force &&
-      php artisan make:filament-user --no-interaction
-      --name="$ADMIN_NAME"
-      --email="$ADMIN_EMAIL"
-      --password="$ADMIN_PASSWORD"
+    initialDeployHook: php artisan db:seed --force
     envVars:
       - key: APP_NAME
         value: Bulkstream Cargo Handling System
@@ -41,12 +36,6 @@ services:
         value: stderr
       - key: LOG_LEVEL
         value: info
-      - key: ADMIN_NAME
-        sync: false
-      - key: ADMIN_EMAIL
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
 
 databases:
   - name: bulkstream-cargo-db

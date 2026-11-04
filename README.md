@@ -12,18 +12,39 @@ npm run build
 php artisan serve
 ```
 
-In the local environment the seeder creates `demo@example.com` with password `password`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Create a production operator with `php artisan make:filament-user`. Never use the demo credentials in production.
+In the local environment the seeder creates `demo@example.com` with password `password`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Production operators are created directly in PostgreSQL as described below. Never use the demo credentials in production.
 
 ## Deploy to Render
 
-The root `render.yaml` provisions a Docker web service and PostgreSQL database in Render's Frankfurt region. In Render, choose **New → Blueprint**, connect this repository, and select its deployment branch. When prompted, provide:
+The root `render.yaml` provisions a Docker web service and PostgreSQL database in Render's Frankfurt region. In Render, choose **New → Blueprint**, connect this repository, and select its deployment branch. When prompted, provide only:
 
 - `APP_KEY`: output from `php artisan key:generate --show`
-- `ADMIN_NAME`: the first production operator's name
-- `ADMIN_EMAIL`: the first production operator's email address
-- `ADMIN_PASSWORD`: a unique password of at least eight characters
 
-The first deployment migrates and seeds the database, then creates that operator. Later pushes to the connected branch automatically rebuild and deploy the root `Dockerfile`; startup runs outstanding migrations before Apache begins serving the application. Render supplies `APP_URL` through `RENDER_EXTERNAL_URL`, and the container listens on Render's `PORT`. The `/up` endpoint is used for health checks.
+The first deployment migrates and seeds the database. It does not create an administrator or accept administrator credentials as environment variables. Later pushes to the connected branch automatically rebuild and deploy the root `Dockerfile`; startup runs outstanding migrations before Apache begins serving the application. Render supplies `APP_URL` through `RENDER_EXTERNAL_URL`, and the container listens on Render's `PORT`. The `/up` endpoint is used for health checks.
+
+Create a production operator from the PostgreSQL terminal after the first deployment. Laravel requires a `$2y$` bcrypt hash; PostgreSQL's `pgcrypto` produces the compatible `$2a$` form, so the query converts its prefix before storing it. Replace the three placeholders, use a unique password of at least eight characters, and keep the password out of shell history where possible.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+INSERT INTO users (name, email, password, created_at, updated_at)
+VALUES (
+    'Operator name',
+    'operator@example.com',
+    overlay(crypt('replace-with-a-unique-password', gen_salt('bf', 12)) placing '2y' from 2 for 2),
+    NOW(),
+    NOW()
+);
+```
+
+The email address must be unique. To reset an existing operator password, run:
+
+```sql
+UPDATE users
+SET password = overlay(crypt('replace-with-a-unique-password', gen_salt('bf', 12)) placing '2y' from 2 for 2),
+    updated_at = NOW()
+WHERE email = 'operator@example.com';
+```
 
 The Blueprint uses Render's free web and PostgreSQL plans for demonstration. Free PostgreSQL databases expire after 30 days; choose paid plans for a durable deployment. Container-local files are ephemeral, so configure durable object storage before adding user uploads.
 
