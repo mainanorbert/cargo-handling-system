@@ -23,6 +23,8 @@ class ShipmentResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-archive-box-arrow-down';
+
     protected static ?string $modelLabel = 'Inbound shipment';
 
     public static function form(Schema $schema): Schema

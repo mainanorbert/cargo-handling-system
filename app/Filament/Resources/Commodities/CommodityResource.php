@@ -22,6 +22,8 @@ class CommodityResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-beaker';
+
     protected static ?string $modelLabel = 'Commodity';
 
     public static function form(Schema $schema): Schema

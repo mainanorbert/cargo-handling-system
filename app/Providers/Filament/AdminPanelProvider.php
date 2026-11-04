@@ -45,7 +45,7 @@ class AdminPanelProvider extends PanelProvider
             ->navigationItems([
                 NavigationItem::make('Record vessel discharge')
                     ->group('Cargo workflow')
-                    ->icon('heroicon-o-arrow-down-tray')
+                    ->icon('heroicon-o-inbox-arrow-down')
                     ->sort(4)
                     ->isActiveWhen(fn (): bool => original_request()->routeIs(MovementResource::getRouteBaseName().'.vessel-discharge'))
                     ->url(fn (): string => MovementResource::getUrl('vessel-discharge')),

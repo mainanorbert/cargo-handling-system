@@ -12,25 +12,25 @@
         <div class="cargo-workflow__steps">
             <article class="cargo-workflow__step">
                 <span class="cargo-workflow__number">01 <span>Origin</span></span>
-                <h3>Register shipment</h3>
+                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-archive-box" class="cargo-workflow__step-icon" aria-hidden="true" />Register shipment</h3>
                 <p>Capture the vessel, commodity, origin and expected quantity.</p>
                 <a href="{{ $shipmentUrl }}">Register shipment <span aria-hidden="true">→</span></a>
             </article>
             <article class="cargo-workflow__step">
                 <span class="cargo-workflow__number">02 <span>Arrival</span></span>
-                <h3>Receive cargo</h3>
+                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-arrow-down-tray" class="cargo-workflow__step-icon" aria-hidden="true" />Receive cargo</h3>
                 <p>Record the vessel discharge into a shore tank.</p>
                 <a href="{{ $dischargeUrl }}">Record discharge <span aria-hidden="true">→</span></a>
             </article>
             <article class="cargo-workflow__step">
                 <span class="cargo-workflow__number">03 <span>Storage</span></span>
-                <h3>Monitor tanks</h3>
+                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-cube" class="cargo-workflow__step-icon" aria-hidden="true" />Monitor tanks</h3>
                 <p>Check stock, commodity and available tank capacity.</p>
                 <a href="{{ $tankUrl }}">View tank balances <span aria-hidden="true">→</span></a>
             </article>
             <article class="cargo-workflow__step">
                 <span class="cargo-workflow__number">04 <span>Dispatch</span></span>
-                <h3>Deliver by truck</h3>
+                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-truck" class="cargo-workflow__step-icon" aria-hidden="true" />Deliver by truck</h3>
                 <p>Record cargo leaving the tank on a truck.</p>
                 <a href="{{ $deliveryUrl }}">Record delivery <span aria-hidden="true">→</span></a>
             </article>

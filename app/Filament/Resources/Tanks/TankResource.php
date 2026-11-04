@@ -19,9 +19,11 @@ class TankResource extends Resource
 {
     protected static ?string $model = Tank::class;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Cargo workflow';
+    protected static string|\UnitEnum|null $navigationGroup = 'Setup';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 4;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-circle-stack';
 
     protected static ?string $modelLabel = 'Tank';
 

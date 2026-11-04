@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Movements;
 
-use App\Filament\Resources\Movements\Pages\ManageMovements;
 use App\Filament\Resources\Movements\Pages\RecordTruckDelivery;
 use App\Filament\Resources\Movements\Pages\RecordVesselDischarge;
 use App\Models\Movement;
@@ -19,8 +18,6 @@ class MovementResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
-    protected static ?string $navigationLabel = 'Cargo movements';
-
     public static function table(Table $table): Table
     {
         return $table->defaultSort(fn (Builder $query): Builder => $query->orderByDesc('occurred_at')->orderByDesc('event_reference'))->columns([
@@ -33,14 +30,8 @@ class MovementResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ManageMovements::route('/'),
             'vessel-discharge' => RecordVesselDischarge::route('/vessel-discharge'),
             'truck-delivery' => RecordTruckDelivery::route('/truck-delivery'),
         ];
-    }
-
-    public static function getNavigationItemActiveRoutePattern(): string
-    {
-        return static::getRouteBaseName().'.index';
     }
 }

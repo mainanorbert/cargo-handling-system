@@ -106,12 +106,23 @@ class CargoWorkflowTest extends TestCase
         $this->assertDatabaseCount('movements', 1);
     }
 
-    public function test_authenticated_operator_can_open_cargo_screens(): void
+    public function test_authenticated_operator_can_open_direct_movement_screens_without_a_generic_movement_index(): void
     {
         $this->actingAs(User::factory()->create());
-        foreach (['/admin', '/admin/shipments', '/admin/tanks', '/admin/movements', '/admin/movements/vessel-discharge', '/admin/movements/truck-delivery'] as $path) {
+        foreach (['/admin', '/admin/shipments', '/admin/tanks', '/admin/movements/vessel-discharge', '/admin/movements/truck-delivery'] as $path) {
             $this->get($path)->assertOk();
         }
+
+        $this->get('/admin/movements')->assertNotFound();
+    }
+
+    public function test_logged_in_operator_sees_an_operations_link_instead_of_an_admin_login_link(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get('/')
+            ->assertOk()
+            ->assertDontSee('Admin login')
+            ->assertSee('Open operations');
     }
 
     public function test_operator_records_discharge_from_movement_screen(): void

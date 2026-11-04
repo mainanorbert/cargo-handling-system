@@ -16,6 +16,8 @@
 .cargo-workflow__number { color: #008080; font-size: .8rem; font-weight: 800; letter-spacing: .04em; }
 .cargo-workflow__number span { margin-left: .3rem; color: #556b6b; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
 .cargo-workflow__step h3 { color: #004d4d; font-size: 1rem; font-weight: 700; }
+.cargo-workflow__step-heading { display: flex; align-items: center; gap: .5rem; }
+.cargo-workflow__step-icon { width: 1.3rem; height: 1.3rem; color: #008080; }
 .cargo-workflow__step p { flex: 1; color: #536364; font-size: .8rem; line-height: 1.5; }
 .cargo-workflow__step a { display: inline-flex; align-items: center; gap: .5rem; margin-top: .5rem; color: #006868; font-size: .8rem; font-weight: 700; text-decoration: underline; text-underline-offset: .2rem; }
 .cargo-workflow__step a:hover { color: #004d4d; }

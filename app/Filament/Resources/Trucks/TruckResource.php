@@ -20,6 +20,8 @@ class TruckResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-truck';
+
     protected static ?string $modelLabel = 'Truck';
 
     public static function form(Schema $schema): Schema
