@@ -18,7 +18,9 @@ class TruckFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'registration' => fake()->unique()->bothify('K?? ###?'),
+            'can_plate' => fake()->unique()->bothify('CAB ###?'),
+            'trail_plate' => fake()->optional()->bothify('TRL ###?'),
         ];
     }
 }

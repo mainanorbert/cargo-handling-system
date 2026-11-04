@@ -38,10 +38,24 @@ abstract class RecordMovement extends ManageRecords
 
         return [
             Placeholder::make('event_reference')->label('Event reference')->content(fn (): string => $this->eventReference)->helperText('Generated automatically for this movement.'),
-            Select::make('shipment_id')->label('Inbound shipment')->options(fn () => Shipment::pluck('reference', 'id'))->searchable()->required()->visible($type === 'inbound'),
+            Select::make('shipment_id')->label('Inbound shipment')->options(fn () => Shipment::pluck('reference', 'id'))->searchable()->required()->live()->visible($type === 'inbound'),
             Select::make('truck_id')->label('Truck')->options(fn () => Truck::pluck('registration', 'id'))->searchable()->required()->visible($type === 'outbound'),
             Select::make('tank_id')->label('Shore tank')->options(fn () => Tank::all()->mapWithKeys(fn ($tank) => [$tank->id => $tank->name.' — '.number_format($tank->balance_ml / 1000, 3).' / '.number_format($tank->capacity_ml / 1000, 3).' L']))->searchable()->required()->live(),
             TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->live(onBlur: true)->helperText($type === 'inbound' ? 'A 0.5% loss is applied before the tank is credited.' : 'No inbound loss is applied to deliveries.'),
+            Placeholder::make('inbound_quantity')->label('Inbound shipment quantity')->visible($type === 'inbound')->content(function (Get $get): string {
+                $shipment = Shipment::find($get('shipment_id'));
+                if (! $shipment) {
+                    return 'Select an inbound shipment to view its quantity.';
+                }
+                try {
+                    $discharged = CargoService::millilitres((string) $get('quantity_litres'));
+                } catch (CargoException) {
+                    return 'Shipment quantity: '.number_format($shipment->expected_ml / 1000, 3).' L. Enter the discharged quantity to calculate the received amount after loss.';
+                }
+                $loss = intdiv($discharged + 100, 200);
+
+                return 'Shipment quantity: '.number_format($shipment->expected_ml / 1000, 3).' L. Actual received after standard 0.5% loss: '.number_format(($discharged - $loss) / 1000, 3).' L.';
+            }),
             Placeholder::make('preview')->label('Estimated loss and tank balance')->content(function (Get $get) use ($type): string {
                 try {
                     $quantity = CargoService::millilitres((string) $get('quantity_litres'));

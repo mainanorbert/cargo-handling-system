@@ -26,12 +26,26 @@ class TruckResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([TextInput::make('registration')->label('Truck registration')->required()->unique(ignoreRecord: true)]);
+        return $schema->components([
+            TextInput::make('registration')
+                ->label('Truck registration')
+                ->required()
+                ->unique(ignoreRecord: true),
+            TextInput::make('can_plate')
+                ->label('Can plate')
+                ->required(),
+            TextInput::make('trail_plate')
+                ->label('Trail plate'),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('registration')->label('Truck registration')->searchable()])->recordActions([EditAction::make(), DeleteAction::make()]);
+        return $table->columns([
+            TextColumn::make('registration')->label('Truck registration')->searchable(),
+            TextColumn::make('can_plate')->label('Can plate')->searchable(),
+            TextColumn::make('trail_plate')->label('Trail plate')->placeholder('—')->searchable(),
+        ])->recordActions([EditAction::make(), DeleteAction::make()]);
     }
 
     public static function getPages(): array

@@ -7,6 +7,7 @@ use App\Exceptions\TankCapacityException;
 use App\Filament\Resources\Movements\Pages\RecordTruckDelivery;
 use App\Filament\Resources\Movements\Pages\RecordVesselDischarge;
 use App\Filament\Resources\Shipments\Pages\ManageShipments;
+use App\Filament\Resources\Trucks\Pages\ManageTrucks;
 use App\Models\Commodity;
 use App\Models\Movement;
 use App\Models\Shipment;
@@ -30,7 +31,7 @@ class CargoWorkflowTest extends TestCase
         $vessel = Vessel::create(['name' => 'Vessel']);
         $shipment = Shipment::create(['reference' => 'S1', 'origin' => 'Origin', 'vessel_id' => $vessel->id, 'commodity_id' => $commodity->id, 'expected_ml' => 100000000]);
         $tank = Tank::create(['name' => 'A', 'capacity_ml' => 99500000]);
-        $truck = Truck::create(['registration' => 'TRUCK']);
+        $truck = Truck::create(['registration' => 'TRUCK', 'can_plate' => 'CAB TRUCK']);
 
         return [$shipment, $tank, $truck];
     }
@@ -116,6 +117,60 @@ class CargoWorkflowTest extends TestCase
         $this->get('/admin/movements')->assertNotFound();
     }
 
+    public function test_operator_registers_a_truck_without_a_trail_plate(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ManageTrucks::class)
+            ->mountAction('create')
+            ->setActionData([
+                'registration' => 'KAA 123A',
+                'can_plate' => 'CAB 123A',
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('trucks', [
+            'registration' => 'KAA 123A',
+            'can_plate' => 'CAB 123A',
+            'trail_plate' => null,
+        ]);
+    }
+
+    public function test_operator_cannot_register_a_truck_without_a_can_plate(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ManageTrucks::class)
+            ->mountAction('create')
+            ->setActionData(['registration' => 'KAA 123A'])
+            ->callMountedAction()
+            ->assertHasActionErrors(['can_plate' => 'required']);
+
+        $this->assertDatabaseMissing('trucks', ['registration' => 'KAA 123A']);
+    }
+
+    public function test_operator_registers_a_shipment_with_a_generated_unique_reference(): void
+    {
+        $commodity = Commodity::create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
+        $vessel = Vessel::create(['name' => 'Vessel']);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ManageShipments::class)
+            ->mountAction('create')
+            ->setActionData([
+                'origin' => 'Port of origin',
+                'vessel_id' => $vessel->id,
+                'commodity_id' => $commodity->id,
+                'expected_ml' => '1000',
+            ])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $shipment = Shipment::where('origin', 'Port of origin')->sole();
+        $this->assertTrue(Str::isUuid(Str::after($shipment->reference, 'SHIP-')));
+    }
+
     public function test_logged_in_operator_sees_an_operations_link_instead_of_an_admin_login_link(): void
     {
         $this->actingAs(User::factory()->create())
@@ -136,6 +191,7 @@ class CargoWorkflowTest extends TestCase
 
         $page
             ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '1000', 'occurred_at' => '2026-01-01 10:00:00'])
+            ->assertMountedActionModalSee('Shipment quantity: 100,000.000 L. Actual received after standard 0.5% loss: 995.000 L.')
             ->assertMountedActionModalSee('Estimated loss: 5.000 L; projected balance: 995.000 L.')
             ->callMountedAction()
             ->assertHasNoActionErrors();

@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class ShipmentResource extends Resource
 {
@@ -29,12 +30,12 @@ class ShipmentResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([TextInput::make('reference')->label('Shipment reference')->required()->unique(ignoreRecord: true), TextInput::make('origin')->label('Point of origin')->required(), Select::make('vessel_id')->label('Vessel')->relationship('vessel', 'name')->searchable()->preload()->required(), Select::make('commodity_id')->label('Commodity')->relationship('commodity', 'code')->preload()->required(), TextInput::make('expected_ml')->label('Expected quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))]);
+        return $schema->components([TextInput::make('reference')->label('Shipment reference')->default(fn (): string => 'SHIP-'.Str::uuid())->required()->unique(ignoreRecord: true), TextInput::make('origin')->label('Point of origin')->required(), Select::make('vessel_id')->label('Vessel')->relationship('vessel', 'name')->searchable()->preload()->required(), Select::make('commodity_id')->label('Commodity')->relationship('commodity', 'code')->preload()->required(), TextInput::make('expected_ml')->label('Quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('reference')->label('Shipment reference')->searchable(), TextColumn::make('origin')->label('Point of origin')->searchable(), TextColumn::make('vessel.name')->label('Vessel'), TextColumn::make('commodity.code')->label('Commodity'), TextColumn::make('expected_ml')->label('Expected (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3))])->recordActions([EditAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists()), DeleteAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists())]);
+        return $table->columns([TextColumn::make('reference')->label('Shipment reference')->searchable(), TextColumn::make('origin')->label('Point of origin')->searchable(), TextColumn::make('vessel.name')->label('Vessel'), TextColumn::make('commodity.code')->label('Commodity'), TextColumn::make('expected_ml')->label('Quantity (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3))])->recordActions([EditAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists()), DeleteAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists())]);
     }
 
     public static function getPages(): array
