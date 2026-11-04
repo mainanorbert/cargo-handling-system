@@ -16,8 +16,11 @@ if [ -z "${APP_KEY:-}" ]; then
     exit 1
 fi
 
-export APP_URL="${APP_URL:-${RENDER_EXTERNAL_URL:-http://localhost}}"
-export ASSET_URL="${ASSET_URL:-${APP_URL}}"
+# Render provides the public URL at runtime. Prefer it over a stale APP_URL
+# from an earlier deployment so Filament's lazy-loaded Alpine components are
+# requested from the public site instead of localhost.
+export APP_URL="${RENDER_EXTERNAL_URL:-${APP_URL:-http://localhost}}"
+unset ASSET_URL
 
 sed -ri "s/^Listen [0-9]+$/Listen ${render_port}/" /etc/apache2/ports.conf
 sed -ri "s/<VirtualHost \*:[0-9]+>/<VirtualHost *:${render_port}>/" /etc/apache2/sites-available/000-default.conf

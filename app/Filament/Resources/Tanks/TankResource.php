@@ -27,6 +27,8 @@ class TankResource extends Resource
 
     protected static ?string $modelLabel = 'Tank';
 
+    protected static ?string $navigationLabel = 'Shore Storage Tanks';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([TextInput::make('name')->label('Tank name')->required()->unique(ignoreRecord: true), TextInput::make('capacity_ml')->label('Capacity (L)')->disabled(fn ($record) => $record !== null)->helperText('Capacity is set when the tank is created.')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))->rule(fn ($record) => function (string $attribute, $value, $fail) use ($record) {

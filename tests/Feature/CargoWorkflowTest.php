@@ -148,7 +148,7 @@ class CargoWorkflowTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         $this->get('/admin')->assertOk()->assertSeeInOrder([
-            'Register shipment', 'Record discharge', 'View tank balances', 'Record delivery',
+            'Register shipment', 'Vessel Discharge (Inbound Cargo)', 'Shore Storage Tanks', 'Truck Delivery (Outbound Cargo)',
         ])->assertSee('/admin/shipments?action=create', false)
             ->assertSee('/admin/movements/vessel-discharge', false)
             ->assertSee('/admin/movements/truck-delivery', false);
@@ -159,9 +159,9 @@ class CargoWorkflowTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         Livewire::withQueryParams(['action' => 'create'])->test(ManageShipments::class)->call('mountDefaultActions')->assertSet('mountedActions.0.name', 'create');
-        $this->get('/admin/movements/vessel-discharge')->assertOk()->assertSee('Record vessel discharge');
+        $this->get('/admin/movements/vessel-discharge')->assertOk()->assertSee('Vessel Discharge (Inbound Cargo)');
         Livewire::test(RecordVesselDischarge::class)->mountAction('record')->assertMountedActionModalSee('Discharged quantity (L)')->assertMountedActionModalSee('Inbound shipment');
-        $this->get('/admin/movements/truck-delivery')->assertOk()->assertSee('Record truck delivery');
+        $this->get('/admin/movements/truck-delivery')->assertOk()->assertSee('Truck Delivery (Outbound Cargo)');
         Livewire::test(RecordTruckDelivery::class)->mountAction('record')->assertMountedActionModalSee('Delivery quantity (L)');
     }
 
