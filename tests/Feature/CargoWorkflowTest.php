@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exceptions\CargoException;
+use App\Exceptions\ShipmentQuantityExceededException;
 use App\Exceptions\TankCapacityException;
 use App\Filament\Resources\Movements\Pages\RecordTruckDelivery;
 use App\Filament\Resources\Movements\Pages\RecordVesselDischarge;
@@ -17,6 +18,9 @@ use App\Models\User;
 use App\Models\Vessel;
 use App\Services\CargoService;
 use Filament\Actions\Testing\TestAction;
+use Filament\Forms\Components\TextInput;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -31,7 +35,7 @@ class CargoWorkflowTest extends TestCase
         $commodity = Commodity::create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
         $vessel = Vessel::create(['name' => 'Vessel']);
         $shipment = Shipment::create(['reference' => 'S1', 'origin' => 'Origin', 'vessel_id' => $vessel->id, 'commodity_id' => $commodity->id, 'expected_ml' => 100000000]);
-        $tank = Tank::create(['name' => 'A', 'capacity_ml' => 99500000]);
+        $tank = Tank::create(['name' => 'A', 'capacity_ml' => 100000000]);
         $truck = Truck::create(['registration' => 'TRUCK', 'can_plate' => 'CAB TRUCK']);
 
         return [$shipment, $tank, $truck];
@@ -42,19 +46,131 @@ class CargoWorkflowTest extends TestCase
         return app(CargoService::class)->record(['type' => 'inbound', 'event_reference' => $reference, 'shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => $quantity, 'occurred_at' => $date]);
     }
 
-    public function test_inbound_loss_and_delivery_update_stock(): void
+    public function test_inbound_discharge_and_delivery_update_stock_without_automatic_loss(): void
     {
         [$shipment, $tank, $truck] = $this->setupCargo();
         $movement = $this->inbound($shipment, $tank);
-        $this->assertSame(500000, $movement->loss_ml);
-        $this->assertSame(99500000, $tank->fresh()->balance_ml);
+        $this->assertSame(0, $movement->loss_ml);
+        $this->assertSame(100000000, $movement->quantity_ml);
+        $this->assertSame(100000000, $tank->fresh()->balance_ml);
         app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'E2', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00']);
-        $this->assertSame(99000000, $tank->fresh()->balance_ml);
+        $this->assertSame(99500000, $tank->fresh()->balance_ml);
+    }
+
+    public function test_shipment_can_be_split_across_tanks_without_exceeding_original_quantity_and_table_shows_allocated_tanks(): void
+    {
+        [$shipment, $tank] = $this->setupCargo();
+        $shipment->update([
+            'reference' => 'SHIP-DEMO-001',
+            'expected_ml' => 1000000,
+        ]);
+        $tank->update(['capacity_ml' => 1000000]);
+        $otherTank = Tank::create(['name' => 'B', 'capacity_ml' => 1000000]);
+
+        $this->inbound($shipment, $tank, 'TANK-A', '900');
+
+        try {
+            $this->inbound($shipment, $otherTank, 'TANK-B-EXCESS', '400', '2026-01-01 11:00:00');
+            $this->fail('Expected 900 L plus 400 L to exceed the shipment quantity.');
+        } catch (ShipmentQuantityExceededException $exception) {
+            $this->assertSame('The discharged quantity exceeds the shipment remaining quantity of 100.000 L.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $otherTank->fresh()->balance_ml);
+        $this->assertDatabaseCount('movements', 1);
+
+        $this->inbound($shipment, $otherTank, 'TANK-B', '100', '2026-01-01 11:00:00');
+
+        $this->assertSame(900000, $tank->fresh()->balance_ml);
+        $this->assertSame(100000, $otherTank->fresh()->balance_ml);
+        $this->assertSame(1000000, $shipment->dischargedMillilitres());
+        $this->assertSame(0, $shipment->remainingMillilitres());
+        $this->assertSame('100.00%', $shipment->formattedDischargePercentage());
+
+        try {
+            $this->inbound($shipment, $otherTank, 'EXCESS', '1', '2026-01-01 12:00:00');
+            $this->fail('Expected the shipment quantity limit to be enforced.');
+        } catch (ShipmentQuantityExceededException $exception) {
+            $this->assertSame('The discharged quantity exceeds the shipment remaining quantity of 0.000 L.', $exception->getMessage());
+        }
+
+        $this->assertSame(100000, $otherTank->fresh()->balance_ml);
+        $this->assertDatabaseCount('movements', 2);
+
+        $this->actingAs(User::factory()->create());
+
+        $page = Livewire::test(RecordVesselDischarge::class)
+            ->assertTableColumnExists('reference', fn (TextColumn $column): bool => $column->formatState($column->getState()) === 'SHIP-DE', $shipment)
+            ->assertTableColumnExists('expected_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Shipped Qty' && $column->getSize($column->getState()) === TextSize::ExtraSmall && $column->getWidth() === '17%', $shipment)
+            ->assertTableColumnExists('discharged_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Offloaded' && $column->getWidth() === '16%', $shipment)
+            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getLabel() === 'Progress' && $column->getWidth() === '13%', $shipment)
+            ->assertTableColumnExists('remaining_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Remaining' && $column->getWidth() === '16%', $shipment)
+            ->assertTableColumnExists('allocations', fn (TextColumn $column): bool => $column->getLabel() === 'Tanks' && $column->getVisibleFrom() === null && $column->getWidth() === '20%', $shipment)
+            ->assertTableColumnStateSet('allocations', 'A, B', $shipment)
+            ->assertTableColumnStateSet('discharge_percentage', '100.00%', $shipment)
+            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'success' && $column->getTooltip($column->getState()) === 'Allowed range', $shipment)
+            ->assertTableColumnDoesNotExist('expectation')
+            ->mountAction(TestAction::make('view')->table($shipment))
+            ->assertMountedActionModalSee('Shipment reference')
+            ->assertMountedActionModalSee('SHIP-DEMO-001')
+            ->assertMountedActionModalSee('Discharged quantity (L)')
+            ->assertMountedActionModalSee('900.000')
+            ->assertMountedActionModalSee('100.000');
+
+        $this->assertTrue($page->instance()->getTable()->isStackedOnMobile());
+        $this->assertSame('vessel-discharge-table', $page->instance()->getTable()->getExtraAttributes()['class']);
+    }
+
+    public function test_ninety_nine_point_five_percent_discharge_meets_expectation_while_lower_progress_does_not(): void
+    {
+        [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 1000000]);
+
+        $this->inbound($shipment, $tank, 'FIRST', '994');
+
+        $this->assertSame('99.40%', $shipment->formattedDischargePercentage());
+        $this->assertFalse($shipment->meetsDischargeExpectation());
+
+        $this->inbound($shipment, $tank, 'SECOND', '1', '2026-01-01 11:00:00');
+
+        $this->assertSame('99.50%', $shipment->formattedDischargePercentage());
+        $this->assertTrue($shipment->meetsDischargeExpectation());
+    }
+
+    public function test_historical_discharge_above_one_hundred_percent_is_marked_outside_expectations(): void
+    {
+        [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 1000000]);
+        $tank->update([
+            'capacity_ml' => 2000000,
+            'balance_ml' => 1001000,
+            'commodity_id' => $shipment->commodity_id,
+        ]);
+        Movement::create([
+            'event_reference' => 'HISTORICAL-OVERAGE',
+            'type' => 'inbound',
+            'status' => 'applied',
+            'tank_id' => $tank->id,
+            'commodity_id' => $shipment->commodity_id,
+            'shipment_id' => $shipment->id,
+            'source_ml' => 1001000,
+            'loss_ml' => 0,
+            'quantity_ml' => 1001000,
+            'loss_basis_points' => 0,
+            'occurred_at' => '2026-01-01 10:00:00',
+            'received_at' => '2026-01-01 10:00:00',
+        ]);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(RecordVesselDischarge::class)
+            ->assertTableColumnStateSet('discharge_percentage', '100.10%', $shipment)
+            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'warning' && $column->getTooltip($column->getState()) === 'Above allowed range', $shipment);
     }
 
     public function test_overflow_rolls_back(): void
     {
         [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 101000000]);
         try {
             $this->inbound($shipment, $tank, 'E1', '100001');
             $this->fail('Expected overflow');
@@ -70,7 +186,7 @@ class CargoWorkflowTest extends TestCase
         $this->inbound($shipment, $tank, 'B', '1000');
         $late = $this->inbound($shipment, $tank, 'A', '1000');
         $this->assertSame('applied', $late->status);
-        $this->assertSame(1990000, $tank->fresh()->balance_ml);
+        $this->assertSame(2000000, $tank->fresh()->balance_ml);
     }
 
     public function test_invalid_and_duplicate_events_do_not_change_stock(): void
@@ -84,7 +200,7 @@ class CargoWorkflowTest extends TestCase
             } catch (CargoException) {
             }
         }
-        $this->assertSame(995000, $tank->fresh()->balance_ml);
+        $this->assertSame(1000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -100,11 +216,11 @@ class CargoWorkflowTest extends TestCase
         } catch (CargoException) {
         }
         try {
-            app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'E3', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '996', 'occurred_at' => '2026-01-01 11:00:00']);
+            app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'E3', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '1001', 'occurred_at' => '2026-01-01 11:00:00']);
             $this->fail('Expected insufficient stock');
         } catch (CargoException) {
         }
-        $this->assertSame(995000, $tank->fresh()->balance_ml);
+        $this->assertSame(1000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -125,14 +241,12 @@ class CargoWorkflowTest extends TestCase
         Livewire::test(ManageTrucks::class)
             ->mountAction('create')
             ->setActionData([
-                'registration' => 'KAA 123A',
                 'can_plate' => 'CAB 123A',
             ])
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $this->assertDatabaseHas('trucks', [
-            'registration' => 'KAA 123A',
             'can_plate' => 'CAB 123A',
             'trail_plate' => null,
         ]);
@@ -144,11 +258,11 @@ class CargoWorkflowTest extends TestCase
 
         Livewire::test(ManageTrucks::class)
             ->mountAction('create')
-            ->setActionData(['registration' => 'KAA 123A'])
+            ->setActionData([])
             ->callMountedAction()
             ->assertHasActionErrors(['can_plate' => 'required']);
 
-        $this->assertDatabaseMissing('trucks', ['registration' => 'KAA 123A']);
+        $this->assertDatabaseCount('trucks', 0);
     }
 
     public function test_operator_registers_a_shipment_with_a_generated_unique_reference(): void
@@ -184,31 +298,66 @@ class CargoWorkflowTest extends TestCase
     public function test_operator_records_discharge_from_movement_screen(): void
     {
         [$shipment, $tank] = $this->setupCargo();
-        $this->actingAs(User::factory()->create());
+        $operator = User::factory()->create();
+        $this->actingAs($operator);
 
         $page = Livewire::test(RecordVesselDischarge::class)->mountAction('record');
         $reference = $page->get('eventReference');
         $this->assertTrue(Str::isUuid($reference));
 
         $page
+            ->setActionData(['shipment_id' => $shipment->id])
+            ->assertActionDataSet(['shipment_id' => $shipment->id, 'quantity_litres' => '100000.000']);
+
+        $page
             ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '1000', 'occurred_at' => '2026-01-01 10:00:00'])
-            ->assertMountedActionModalSee('Shipment quantity: 100,000.000 L. Actual received after standard 0.5% loss: 995.000 L.')
-            ->assertMountedActionModalSee('Estimated loss: 5.000 L; projected balance: 995.000 L.')
+            ->assertMountedActionModalSee('Original quantity: 100,000.000 L; offloaded: 0.000 L (0.00%)')
+            ->assertMountedActionModalSeeHtml('style="font-size: 0.6875rem; line-height: 1rem;"')
             ->callMountedAction()
             ->assertHasNoActionErrors();
-        $this->assertSame(995000, $tank->fresh()->balance_ml);
-        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'inbound', 'loss_ml' => 5000]);
+        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'inbound', 'loss_ml' => 0, 'quantity_ml' => 1000000, 'recorded_by_user_id' => $operator->id]);
     }
 
-    public function test_dashboard_presents_workflow_links_in_order(): void
+    public function test_discharge_form_defaults_to_the_shipment_remaining_quantity_and_rejects_more(): void
     {
+        [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 1000000]);
+        $this->inbound($shipment, $tank, 'TANK-A', '900');
+        $otherTank = Tank::create(['name' => 'B', 'capacity_ml' => 1000000]);
+        $this->actingAs(User::factory()->create());
+
+        $page = Livewire::test(RecordVesselDischarge::class)
+            ->mountAction('record')
+            ->setActionData(['shipment_id' => $shipment->id]);
+
+        $page
+            ->assertActionDataSet(['shipment_id' => $shipment->id, 'quantity_litres' => '100.000'])
+            ->assertMountedActionModalSee('Original quantity: 1,000.000 L; offloaded: 900.000 L (90.00%)')
+            ->assertMountedActionModalDontSee('remaining:')
+            ->assertMountedActionModalDontSee('After this entry:')
+            ->setActionData(['tank_id' => $otherTank->id, 'quantity_litres' => '101', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->callMountedAction()
+            ->assertHasActionErrors(['quantity_litres']);
+
+        $this->assertSame(0, $otherTank->fresh()->balance_ml);
+        $this->assertDatabaseCount('movements', 1);
+    }
+
+    public function test_dashboard_presents_operational_statistics(): void
+    {
+        Commodity::create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
+        Commodity::create(['code' => 'CPOL', 'description' => 'Crude Palm Olein']);
+        Commodity::create(['code' => 'PFAD', 'description' => 'Palm Fatty Acid Distillate']);
         $this->actingAs(User::factory()->create());
 
         $this->get('/admin')->assertOk()->assertSeeInOrder([
-            'Register shipment', 'Vessel Discharge (Inbound Cargo)', 'Shore Storage Tanks', 'Truck Delivery (Outbound Cargo)',
-        ])->assertSee('/admin/shipments?action=create', false)
-            ->assertSee('/admin/movements/vessel-discharge', false)
-            ->assertSee('/admin/movements/truck-delivery', false);
+            'Registered shipments', 'Inbound discharges', 'Outbound deliveries', 'Total tank capacity', 'Current tank stock', 'Available capacity', 'Exceptions needing review',
+        ])->assertSee('Storage by commodity')
+            ->assertSee('CPO')
+            ->assertSee('CPOL')
+            ->assertSee('PFAD')
+            ->assertDontSee('Follow the cargo journey');
     }
 
     public function test_dashboard_action_links_open_the_correct_forms(): void
@@ -234,17 +383,18 @@ class CargoWorkflowTest extends TestCase
 
         $page
             ->setActionData(['truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00'])
-            ->assertMountedActionModalSee('Estimated loss: 0.000 L; projected balance: 495.000 L.')
+            ->assertMountedActionModalSee('Projected balance after delivery: 500.000 L.')
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertSame(495000, $tank->fresh()->balance_ml);
+        $this->assertSame(500000, $tank->fresh()->balance_ml);
         $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'outbound', 'loss_ml' => 0]);
     }
 
     public function test_discharge_page_displays_overflow_error_without_changing_stock(): void
     {
         [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 101000000]);
         $this->actingAs(User::factory()->create());
 
         $page = Livewire::test(RecordVesselDischarge::class)->mountAction('record');
@@ -265,7 +415,7 @@ class CargoWorkflowTest extends TestCase
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'quantity_ml' => 995000]);
+        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'quantity_ml' => 1000000]);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -280,12 +430,33 @@ class CargoWorkflowTest extends TestCase
         $this->assertTrue(Str::isUuid($reference));
 
         $page
-            ->setActionData(['truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '996', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->setActionData(['truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '1001', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->assertMountedActionModalSee('Delivery exceeds available tank stock of 1,000.000 L.')
             ->callMountedAction()
             ->assertHasActionErrors(['quantity_litres'])
-            ->assertMountedActionModalSee('The delivery exceeds the available stock.');
+            ->assertMountedActionModalSee('must not be greater than 1000.000');
 
-        $this->assertSame(995000, $tank->fresh()->balance_ml);
+        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertDatabaseCount('movements', 1);
+    }
+
+    public function test_delivery_quantity_is_limited_to_the_selected_tank_balance(): void
+    {
+        [$shipment, $tank, $truck] = $this->setupCargo();
+        $this->inbound($shipment, $tank, 'E1', '1000');
+        $this->actingAs(User::factory()->create());
+
+        $page = Livewire::test(RecordTruckDelivery::class)
+            ->mountAction('record')
+            ->setActionData(['tank_id' => $tank->id])
+            ->assertSchemaComponentExists('quantity_litres', checkComponentUsing: fn (TextInput $component): bool => $component->getMaxValue() === '1000.000');
+
+        $page
+            ->setActionData(['truck_id' => $truck->id, 'quantity_litres' => '1000.001', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->callMountedAction()
+            ->assertHasActionErrors(['quantity_litres']);
+
+        $this->assertSame(1000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -295,7 +466,7 @@ class CargoWorkflowTest extends TestCase
         $this->get('/admin/movements/truck-delivery')->assertRedirect('/admin/login');
     }
 
-    public function test_each_movement_page_filters_and_paginates_its_records(): void
+    public function test_discharge_page_has_one_shipment_row_and_delivery_page_paginates_movements(): void
     {
         [$shipment, $tank, $truck] = $this->setupCargo();
         $events = [];
@@ -306,22 +477,29 @@ class CargoWorkflowTest extends TestCase
         app(CargoService::class)->recordBatch($events);
         $this->actingAs(User::factory()->create());
 
-        foreach ([RecordVesselDischarge::class => 'inbound', RecordTruckDelivery::class => 'outbound'] as $pageClass => $type) {
-            $records = Movement::where('type', $type)->orderByDesc('event_reference')->get();
-            $otherRecords = Movement::where('type', '!=', $type)->get();
-            $page = Livewire::test($pageClass)
-                ->assertCanSeeTableRecords($records->take(10))
-                ->assertCanNotSeeTableRecords($records->slice(10))
-                ->assertCanNotSeeTableRecords($otherRecords);
+        Livewire::test(RecordVesselDischarge::class)
+            ->assertCountTableRecords(1)
+            ->assertCanSeeTableRecords([$shipment])
+            ->assertTableColumnStateSet('discharged_ml', 1200000, $shipment)
+            ->assertTableColumnStateSet('discharge_percentage', '1.20%', $shipment)
+            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'danger' && $column->getTooltip($column->getState()) === 'Below allowed range', $shipment)
+            ->assertTableColumnStateSet('allocations', 'A', $shipment)
+            ->assertTableColumnDoesNotExist('expectation');
 
-            $page->call('gotoPage', 2)
-                ->assertCanSeeTableRecords($records->slice(10))
-                ->assertCanNotSeeTableRecords($records->take(10));
+        $records = Movement::where('type', 'outbound')->orderByDesc('event_reference')->get();
+        $otherRecords = Movement::where('type', 'inbound')->get();
+        $page = Livewire::test(RecordTruckDelivery::class)
+            ->assertCanSeeTableRecords($records->take(10))
+            ->assertCanNotSeeTableRecords($records->slice(10))
+            ->assertCanNotSeeTableRecords($otherRecords);
 
-            $page->set('tableRecordsPerPage', 25)
-                ->assertCanSeeTableRecords($records)
-                ->assertCanNotSeeTableRecords($otherRecords);
-        }
+        $page->call('gotoPage', 2)
+            ->assertCanSeeTableRecords($records->slice(10))
+            ->assertCanNotSeeTableRecords($records->take(10));
+
+        $page->set('tableRecordsPerPage', 25)
+            ->assertCanSeeTableRecords($records)
+            ->assertCanNotSeeTableRecords($otherRecords);
     }
 
     public function test_movement_tables_show_details_in_a_view_modal(): void
@@ -331,14 +509,23 @@ class CargoWorkflowTest extends TestCase
         $outbound = app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'OUTBOUND', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00']);
         $this->actingAs(User::factory()->create());
 
-        foreach ([RecordVesselDischarge::class => $inbound, RecordTruckDelivery::class => $outbound] as $pageClass => $movement) {
-            Livewire::test($pageClass)
-                ->assertActionExists(TestAction::make('view')->table($movement))
-                ->mountAction(TestAction::make('view')->table($movement))
-                ->assertMountedActionModalSee('Movement details')
-                ->assertMountedActionModalSee('Source quantity (L)')
-                ->assertMountedActionModalSee('Loss rate')
-                ->assertMountedActionModalSee('Recorded at');
-        }
+        Livewire::test(RecordVesselDischarge::class)
+            ->assertTableColumnExists('discharge_percentage')
+            ->assertTableColumnDoesNotExist('expectation')
+            ->assertActionExists(TestAction::make('view')->table($shipment))
+            ->mountAction(TestAction::make('view')->table($shipment))
+            ->assertMountedActionModalSee('discharge details')
+            ->assertMountedActionModalSee('Tank discharge history')
+            ->assertMountedActionModalSee('INBOUND');
+
+        Livewire::test(RecordTruckDelivery::class)
+            ->assertTableColumnDoesNotExist('event_reference')
+            ->assertTableColumnExists('shipment_or_truck')
+            ->assertActionExists(TestAction::make('view')->table($outbound))
+            ->mountAction(TestAction::make('view')->table($outbound))
+            ->assertMountedActionModalSee('Movement details')
+            ->assertMountedActionModalSee('Source quantity (L)')
+            ->assertMountedActionModalSee('Loss rate')
+            ->assertMountedActionModalSee('Recorded at');
     }
 }

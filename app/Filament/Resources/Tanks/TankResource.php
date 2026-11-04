@@ -27,7 +27,7 @@ class TankResource extends Resource
 
     protected static ?string $modelLabel = 'Tank';
 
-    protected static ?string $navigationLabel = 'Shore Storage Tanks';
+    protected static ?string $navigationLabel = 'Tanks';
 
     public static function form(Schema $schema): Schema
     {
@@ -44,7 +44,7 @@ class TankResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('name')->searchable(), TextColumn::make('commodity.code')->label('Current commodity')->placeholder('Empty'), TextColumn::make('capacity_ml')->label('Capacity (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3)), TextColumn::make('balance_ml')->label('Balance (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3)), TextColumn::make('utilisation')->label('Utilisation')->state(fn ($record) => number_format($record->balance_ml * 100 / $record->capacity_ml, 1).'%')])->recordActions([EditAction::make(), DeleteAction::make()->visible(fn ($record) => ! Movement::where('tank_id', $record->id)->exists())]);
+        return $table->columns([TextColumn::make('name')->searchable(), TextColumn::make('commodity.code')->label('Current commodity')->placeholder('Empty'), TextColumn::make('capacity_ml')->label('Capacity (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3)), TextColumn::make('balance_ml')->label('Current tank stock (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3)), TextColumn::make('utilisation')->label('Utilisation')->state(fn ($record) => number_format($record->balance_ml * 100 / $record->capacity_ml, 1).'%')])->recordActions([EditAction::make(), DeleteAction::make()->visible(fn ($record) => ! Movement::where('tank_id', $record->id)->exists())]);
     }
 
     public static function getPages(): array

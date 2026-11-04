@@ -10,7 +10,15 @@ class Movement extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['event_reference', 'type', 'status', 'tank_id', 'commodity_id', 'shipment_id', 'truck_id', 'source_ml', 'loss_ml', 'quantity_ml', 'loss_basis_points', 'occurred_at', 'received_at'];
+    protected $fillable = ['event_reference', 'type', 'status', 'tank_id', 'commodity_id', 'shipment_id', 'truck_id', 'source_ml', 'loss_ml', 'quantity_ml', 'loss_basis_points', 'occurred_at', 'received_at', 'recorded_by_user_id'];
+
+    protected function casts(): array
+    {
+        return [
+            'occurred_at' => 'datetime',
+            'received_at' => 'datetime',
+        ];
+    }
 
     public function tank(): BelongsTo
     {
@@ -30,5 +38,10 @@ class Movement extends Model
     public function truck(): BelongsTo
     {
         return $this->belongsTo(Truck::class);
+    }
+
+    public function recordedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by_user_id');
     }
 }

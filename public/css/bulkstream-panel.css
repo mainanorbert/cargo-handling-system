@@ -4,23 +4,37 @@
 .fi-logo { color: #004d4d; font-weight: 800; letter-spacing: -.03em; }
 .fi-sidebar-item.fi-active > .fi-sidebar-item-btn { background: #e0efed; }
 .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label { color: #004d4d; }
-.cargo-workflow { overflow: hidden; border: 1px solid #dce6e5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 4px #004d4d0d; }
-.cargo-workflow__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1.6rem; }
-.cargo-workflow__intro h2 { font-size: 1.5rem; font-weight: 700; line-height: 1.2; margin: .35rem 0 .5rem; }
-.cargo-workflow__intro p:not(.cargo-workflow__eyebrow) { color: #daeeee; font-size: .875rem; line-height: 1.5; max-width: 42rem; }
-.cargo-workflow__eyebrow { color: #bce4df; font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.cargo-workflow__tag { flex-shrink: 0; border: 1px solid #78aaa6; border-radius: 999px; padding: .35rem .7rem; color: #e1f2ef; font-size: .7rem; font-weight: 600; }
-.cargo-workflow__steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.cargo-workflow__step { display: flex; flex-direction: column; align-items: flex-start; gap: .65rem; padding: 1.35rem; border-right: 1px solid #e3eceb; }
-.cargo-workflow__step:last-child { border-right: 0; }
-.cargo-workflow__number { color: #008080; font-size: .8rem; font-weight: 800; letter-spacing: .04em; }
-.cargo-workflow__number span { margin-left: .3rem; color: #556b6b; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
-.cargo-workflow__step h3 { color: #004d4d; font-size: 1rem; font-weight: 700; }
-.cargo-workflow__step-heading { display: flex; align-items: center; gap: .5rem; }
-.cargo-workflow__step-icon { width: 1.3rem; height: 1.3rem; color: #008080; }
-.cargo-workflow__step p { flex: 1; color: #536364; font-size: .8rem; line-height: 1.5; }
-.cargo-workflow__step a { display: inline-flex; align-items: center; gap: .5rem; margin-top: .5rem; color: #006868; font-size: .8rem; font-weight: 700; text-decoration: underline; text-underline-offset: .2rem; }
-.cargo-workflow__step a:hover { color: #004d4d; }
-.cargo-workflow__step a:focus-visible { outline: 3px solid #008080; outline-offset: 4px; }
-@media (max-width: 1100px) { .cargo-workflow__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cargo-workflow__step:nth-child(2) { border-right: 0; } .cargo-workflow__step:nth-child(-n+2) { border-bottom: 1px solid #e3eceb; } }
-@media (max-width: 600px) { .cargo-workflow__intro { flex-direction: column; } .cargo-workflow__steps { grid-template-columns: 1fr; } .cargo-workflow__step { border-right: 0; border-bottom: 1px solid #e3eceb; } .cargo-workflow__step:last-child { border-bottom: 0; } }
+.cargo-dashboard { overflow: hidden; border: 1px solid #dce6e5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 4px #004d4d0d; }
+.cargo-dashboard__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1.5rem; }
+.cargo-dashboard__intro h2 { font-size: 1.4rem; font-weight: 700; line-height: 1.2; margin: .3rem 0 .45rem; }
+.cargo-dashboard__intro p:not(.cargo-dashboard__eyebrow) { color: #daeeee; font-size: .875rem; }
+.cargo-dashboard__eyebrow { color: #bce4df; font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.cargo-dashboard__intro a { flex-shrink: 0; border: 1px solid #78aaa6; border-radius: .5rem; padding: .45rem .7rem; color: #fff; font-size: .8rem; font-weight: 700; }
+.cargo-dashboard__section { padding: 1.25rem; }
+.cargo-dashboard__section-heading { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
+.cargo-dashboard__section-heading h3 { color: #004d4d; font-size: .95rem; font-weight: 800; }
+.cargo-dashboard__section-heading span { color: #637475; font-size: .75rem; text-align: right; }
+.cargo-dashboard__commodities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.cargo-dashboard__commodity { border: 1px solid #dce6e5; border-radius: .65rem; padding: 1rem; background: #fbfdfd; }
+.cargo-dashboard__commodity h4 { color: #004d4d; font-size: 1rem; font-weight: 800; }
+.cargo-dashboard__commodity p { min-height: 2.4em; margin-top: .2rem; color: #637475; font-size: .75rem; line-height: 1.4; }
+.cargo-dashboard__commodity dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin-top: 1rem; }
+.cargo-dashboard__commodity dt { color: #637475; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+.cargo-dashboard__commodity dd { margin-top: .15rem; color: #263238; font-size: .8rem; font-weight: 700; }
+.cargo-dashboard__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #e3eceb; }
+.cargo-dashboard__grid .cargo-dashboard__section + .cargo-dashboard__section { border-left: 1px solid #e3eceb; }
+.cargo-dashboard__list { display: grid; gap: .5rem; }
+.cargo-dashboard__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .75rem; padding: .7rem; border-radius: .5rem; background: #f4f6f6; }
+.cargo-dashboard__row strong { display: block; color: #263238; font-size: .8rem; }
+.cargo-dashboard__row span { display: block; margin-top: .12rem; overflow: hidden; color: #637475; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.cargo-dashboard__quantity, .cargo-dashboard__row time { color: #004d4d; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.cargo-dashboard__row time { grid-column: 1 / -1; justify-self: end; }
+.cargo-dashboard__utilisation { grid-column: 1 / -1; height: .35rem; overflow: hidden; border-radius: 999px; background: #dce6e5; }
+.cargo-dashboard__utilisation span { display: block; height: 100%; margin: 0; background: #008080; }
+.cargo-dashboard__empty { color: #637475; font-size: .8rem; }
+.vessel-discharge-table .fi-ta-table { table-layout: fixed; }
+.vessel-discharge-table .fi-ta-header-cell { padding: .65rem .5rem; font-size: .75rem; line-height: 1rem; }
+.vessel-discharge-table .fi-ta-text:not(.fi-inline) { padding: .65rem .5rem; }
+.vessel-discharge-table .fi-ta-cell:has(.fi-ta-actions) { padding: .65rem .5rem; }
+@media (max-width: 900px) { .cargo-dashboard__commodities { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .cargo-dashboard__intro, .cargo-dashboard__section-heading { flex-direction: column; } .cargo-dashboard__section-heading span { text-align: left; } .cargo-dashboard__grid { grid-template-columns: 1fr; } .cargo-dashboard__grid .cargo-dashboard__section + .cargo-dashboard__section { border-top: 1px solid #e3eceb; border-left: 0; } }

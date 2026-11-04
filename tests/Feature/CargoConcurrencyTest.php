@@ -32,7 +32,7 @@ class CargoConcurrencyTest extends TestCase
         $commodity = Commodity::factory()->create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
         $vessel = Vessel::factory()->create(['name' => 'Vessel']);
         $shipment = Shipment::factory()->create(['reference' => 'S1', 'origin' => 'Origin', 'vessel_id' => $vessel->id, 'commodity_id' => $commodity->id, 'expected_ml' => 100000000]);
-        $tank = Tank::factory()->create(['name' => 'Tank A', 'capacity_ml' => 99500000]);
+        $tank = Tank::factory()->create(['name' => 'Tank A', 'capacity_ml' => 100000000]);
 
         return [$shipment, $tank];
     }
@@ -46,22 +46,29 @@ class CargoConcurrencyTest extends TestCase
     public function test_competing_receipts_cannot_overallocate_capacity(): void
     {
         [$shipment, $tank] = $this->cargo();
+        $otherShipment = Shipment::factory()->create([
+            'reference' => 'S2',
+            'origin' => 'Origin',
+            'vessel_id' => $shipment->vessel_id,
+            'commodity_id' => $shipment->commodity_id,
+            'expected_ml' => 100000000,
+        ]);
 
         $results = $this->compete([
             $this->receipt($shipment, $tank, 'A'),
-            $this->receipt($shipment, $tank, 'B'),
+            $this->receipt($otherShipment, $tank, 'B'),
         ]);
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\TankCapacityException', 'applied'], $results);
-        $this->assertSame(99500000, $tank->fresh()->balance_ml);
+        $this->assertSame(100000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
     public function test_duplicate_events_on_different_tanks_are_applied_only_once(): void
     {
         [$shipment, $tank] = $this->cargo();
-        $otherTank = Tank::factory()->create(['name' => 'Tank B', 'capacity_ml' => 99500000]);
+        $otherTank = Tank::factory()->create(['name' => 'Tank B', 'capacity_ml' => 100000000]);
 
         $results = $this->compete([
             $this->receipt($shipment, $tank, 'DUPLICATE'),
@@ -70,7 +77,23 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\CargoException', 'applied'], $results);
-        $this->assertSame(99500000, (int) Tank::sum('balance_ml'));
+        $this->assertSame(100000000, (int) Tank::sum('balance_ml'));
+        $this->assertDatabaseCount('movements', 1);
+    }
+
+    public function test_competing_receipts_on_different_tanks_cannot_exceed_the_shipment_quantity(): void
+    {
+        [$shipment, $tank] = $this->cargo();
+        $otherTank = Tank::factory()->create(['name' => 'Tank B', 'capacity_ml' => 100000000]);
+
+        $results = $this->compete([
+            $this->receipt($shipment, $tank, 'SHIPMENT-A'),
+            $this->receipt($shipment, $otherTank, 'SHIPMENT-B'),
+        ]);
+
+        sort($results);
+        $this->assertSame(['App\\Exceptions\\ShipmentQuantityExceededException', 'applied'], $results);
+        $this->assertSame(100000000, (int) Tank::sum('balance_ml'));
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -88,7 +111,7 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\CargoException', 'applied'], $results);
-        $this->assertSame(39500000, $tank->fresh()->balance_ml);
+        $this->assertSame(40000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 2);
     }
 

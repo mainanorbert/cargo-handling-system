@@ -28,6 +28,8 @@ class ShipmentResource extends Resource
 
     protected static ?string $modelLabel = 'Inbound shipment';
 
+    protected static ?string $navigationLabel = 'Shipments';
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([TextInput::make('reference')->label('Shipment reference')->default(fn (): string => 'SHIP-'.Str::uuid())->required()->unique(ignoreRecord: true), TextInput::make('origin')->label('Point of origin')->required(), Select::make('vessel_id')->label('Vessel')->relationship('vessel', 'name')->searchable()->preload()->required(), Select::make('commodity_id')->label('Commodity')->relationship('commodity', 'code')->preload()->required(), TextInput::make('expected_ml')->label('Quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))]);

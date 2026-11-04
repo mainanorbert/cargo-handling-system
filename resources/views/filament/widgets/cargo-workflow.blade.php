@@ -1,39 +1,73 @@
 <x-filament-widgets::widget>
-    <section class="cargo-workflow" aria-labelledby="cargo-workflow-heading">
-        <div class="cargo-workflow__intro">
+    <section class="cargo-dashboard" aria-labelledby="cargo-dashboard-heading">
+        <div class="cargo-dashboard__intro">
             <div>
-                <p class="cargo-workflow__eyebrow">Operations dashboard</p>
-                <h2 id="cargo-workflow-heading">Follow the cargo journey</h2>
-                <p>Start at the point of origin, then record each movement as cargo arrives, is stored, and leaves by truck.</p>
+                <p class="cargo-dashboard__eyebrow">Operations dashboard</p>
+                <h2 id="cargo-dashboard-heading">Cargo storage overview</h2>
+                <p>Live inventory, available capacity and recent cargo activity.</p>
             </div>
-            <span class="cargo-workflow__tag">Origin to delivery</span>
+            <a href="{{ $movementUrl }}">View movements <span aria-hidden="true">→</span></a>
         </div>
 
-        <div class="cargo-workflow__steps">
-            <article class="cargo-workflow__step">
-                <span class="cargo-workflow__number">01 <span>Origin</span></span>
-                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-archive-box" class="cargo-workflow__step-icon" aria-hidden="true" />Register shipment</h3>
-                <p>Capture the vessel, commodity, origin and expected quantity.</p>
-                <a href="{{ $shipmentUrl }}">Register shipment <span aria-hidden="true">→</span></a>
-            </article>
-            <article class="cargo-workflow__step">
-                <span class="cargo-workflow__number">02 <span>Arrival</span></span>
-                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-arrow-down-tray" class="cargo-workflow__step-icon" aria-hidden="true" />Receive cargo</h3>
-                <p>Record the vessel discharge into a shore tank.</p>
-                <a href="{{ $dischargeUrl }}">Vessel Discharge (Inbound Cargo) <span aria-hidden="true">→</span></a>
-            </article>
-            <article class="cargo-workflow__step">
-                <span class="cargo-workflow__number">03 <span>Storage</span></span>
-                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-cube" class="cargo-workflow__step-icon" aria-hidden="true" />Monitor tanks</h3>
-                <p>Check stock, commodity and available tank capacity.</p>
-                <a href="{{ $tankUrl }}">Shore Storage Tanks <span aria-hidden="true">→</span></a>
-            </article>
-            <article class="cargo-workflow__step">
-                <span class="cargo-workflow__number">04 <span>Dispatch</span></span>
-                <h3 class="cargo-workflow__step-heading"><x-filament::icon icon="heroicon-o-truck" class="cargo-workflow__step-icon" aria-hidden="true" />Deliver by truck</h3>
-                <p>Record cargo leaving the tank on a truck.</p>
-                <a href="{{ $deliveryUrl }}">Truck Delivery (Outbound Cargo) <span aria-hidden="true">→</span></a>
-            </article>
+        <section class="cargo-dashboard__section" aria-labelledby="commodity-storage-heading">
+            <div class="cargo-dashboard__section-heading">
+                <h3 id="commodity-storage-heading">Storage by commodity</h3>
+                <span>Allocated tank capacity and live stock</span>
+            </div>
+            <div class="cargo-dashboard__commodities">
+                @foreach ($commodities as $commodity)
+                    <article class="cargo-dashboard__commodity">
+                        <div>
+                            <h4>{{ $commodity['code'] }}</h4>
+                            <p>{{ $commodity['description'] }}</p>
+                        </div>
+                        <dl>
+                            <div><dt>Tanks</dt><dd>{{ $commodity['tank_count'] }}</dd></div>
+                            <div><dt>Capacity</dt><dd>{{ number_format($commodity['capacity_ml'] / 1000, 3) }} L</dd></div>
+                            <div><dt>Stock</dt><dd>{{ number_format($commodity['balance_ml'] / 1000, 3) }} L</dd></div>
+                            <div><dt>Available</dt><dd>{{ number_format($commodity['available_ml'] / 1000, 3) }} L</dd></div>
+                        </dl>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <div class="cargo-dashboard__grid">
+            <section class="cargo-dashboard__section" aria-labelledby="tank-status-heading">
+                <div class="cargo-dashboard__section-heading">
+                    <h3 id="tank-status-heading">Tank status</h3>
+                    <span>Current utilisation</span>
+                </div>
+                <div class="cargo-dashboard__list">
+                    @forelse ($tanks as $tank)
+                        <article class="cargo-dashboard__row">
+                            <div><strong>{{ $tank->name }}</strong><span>{{ $tank->commodity?->code ?? 'Empty' }}</span></div>
+                            <div class="cargo-dashboard__quantity">{{ number_format($tank->balance_ml / 1000, 3) }} / {{ number_format($tank->capacity_ml / 1000, 3) }} L</div>
+                            <div class="cargo-dashboard__utilisation" aria-label="{{ number_format($tank->balance_ml * 100 / $tank->capacity_ml, 1) }} percent utilised"><span style="width: {{ number_format($tank->balance_ml * 100 / $tank->capacity_ml, 1, '.', '') }}%"></span></div>
+                        </article>
+                    @empty
+                        <p class="cargo-dashboard__empty">No tanks have been registered.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="cargo-dashboard__section" aria-labelledby="recent-movements-heading">
+                <div class="cargo-dashboard__section-heading">
+                    <h3 id="recent-movements-heading">Recent movements</h3>
+                    <span>Most recent event time first</span>
+                </div>
+                <div class="cargo-dashboard__list">
+                    @forelse ($recentMovements as $movement)
+                        <article class="cargo-dashboard__row">
+                            <div><strong>{{ $movement->type === 'inbound' ? 'Inbound discharge' : 'Truck delivery' }}</strong><span>{{ $movement->shipment?->reference ?? $movement->truck?->can_plate }}</span></div>
+                            <div class="cargo-dashboard__quantity">{{ number_format($movement->quantity_ml / 1000, 3) }} L</div>
+                            <time datetime="{{ $movement->occurred_at }}">{{ $movement->occurred_at->format('d M H:i') }}</time>
+                        </article>
+                    @empty
+                        <p class="cargo-dashboard__empty">No cargo movements have been recorded.</p>
+                    @endforelse
+                </div>
+            </section>
         </div>
     </section>
 </x-filament-widgets::widget>

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\CargoException;
+use App\Exceptions\ShipmentQuantityExceededException;
 use App\Exceptions\TankCapacityException;
 use App\Models\Movement;
 use App\Models\Shipment;
@@ -62,16 +63,50 @@ class CargoService
                     throw new CargoException('A selected tank no longer exists.');
                 }
 
+                $shipmentIds = array_values(array_unique(array_filter(array_column($events, 'shipment_id'))));
+                $shipments = Shipment::query()
+                    ->whereIn('id', $shipmentIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if ($shipments->count() !== count($shipmentIds)) {
+                    throw new CargoException('A selected shipment no longer exists.');
+                }
+
                 if (Movement::whereIn('event_reference', $references)->exists()) {
                     throw new CargoException('This event reference has already been recorded.');
                 }
 
+                $dischargedByShipment = Movement::query()
+                    ->select('shipment_id')
+                    ->selectRaw('SUM(source_ml) as discharged_ml')
+                    ->whereIn('shipment_id', $shipmentIds)
+                    ->where('type', 'inbound')
+                    ->where('status', 'applied')
+                    ->groupBy('shipment_id')
+                    ->pluck('discharged_ml', 'shipment_id');
+                $remainingByShipment = $shipments->mapWithKeys(function (Shipment $shipment) use ($dischargedByShipment): array {
+                    $alreadyDischarged = (int) $dischargedByShipment->get($shipment->id, 0);
+
+                    return [$shipment->id => max(0, (int) $shipment->expected_ml - $alreadyDischarged)];
+                })->all();
+
                 $newMovements = [];
+                $recordedByUserId = auth()->id();
                 foreach ($events as $event) {
                     $inbound = $event['type'] === 'inbound';
-                    $shipment = $inbound ? Shipment::findOrFail($event['shipment_id']) : null;
+                    $shipment = $inbound ? $shipments->get($event['shipment_id']) : null;
                     $quantity = self::millilitres($event['quantity_litres']);
-                    $loss = $inbound ? intdiv($quantity + 100, 200) : 0;
+                    if ($shipment && $quantity > $remainingByShipment[$shipment->id]) {
+                        throw new ShipmentQuantityExceededException(
+                            'The discharged quantity exceeds the shipment remaining quantity of '.number_format($remainingByShipment[$shipment->id] / 1000, 3).' L.'
+                        );
+                    }
+                    if ($shipment) {
+                        $remainingByShipment[$shipment->id] -= $quantity;
+                    }
                     $newMovements[] = new Movement([
                         'event_reference' => $event['event_reference'],
                         'type' => $event['type'], 'status' => 'applied',
@@ -79,10 +114,11 @@ class CargoService
                         'commodity_id' => $shipment?->commodity_id,
                         'shipment_id' => $shipment?->id,
                         'truck_id' => $inbound ? null : $event['truck_id'],
-                        'source_ml' => $quantity, 'loss_ml' => $loss,
-                        'quantity_ml' => $quantity - $loss, 'loss_basis_points' => $inbound ? 50 : 0,
+                        'source_ml' => $quantity, 'loss_ml' => 0,
+                        'quantity_ml' => $quantity, 'loss_basis_points' => 0,
                         'occurred_at' => Carbon::parse($event['occurred_at'])->setTimezone(config('app.timezone'))->startOfSecond()->toDateTimeString(),
                         'received_at' => now(),
+                        'recorded_by_user_id' => $recordedByUserId,
                     ]);
                 }
 
@@ -147,7 +183,7 @@ class CargoService
         foreach ($movements as $movement) {
             $quantity = (int) $movement->quantity_ml;
             if ($quantity <= 0) {
-                throw new CargoException('The received quantity must be greater than zero after loss.');
+                throw new CargoException('The movement quantity must be greater than zero.');
             }
             if ($movement->type === 'inbound') {
                 if ($balance > 0 && $commodityId !== (int) $movement->commodity_id) {

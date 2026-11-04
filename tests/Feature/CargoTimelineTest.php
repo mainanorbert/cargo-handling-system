@@ -24,7 +24,7 @@ class CargoTimelineTest extends TestCase
         $commodity = Commodity::factory()->create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
         $vessel = Vessel::factory()->create(['name' => 'Vessel']);
         $shipment = Shipment::factory()->create(['reference' => 'S1', 'origin' => 'Origin', 'vessel_id' => $vessel->id, 'commodity_id' => $commodity->id, 'expected_ml' => 100000000]);
-        $tank = Tank::factory()->create(['name' => 'Tank', 'capacity_ml' => 99500000]);
+        $tank = Tank::factory()->create(['name' => 'Tank', 'capacity_ml' => 100000000]);
         $truck = Truck::factory()->create(['registration' => 'TRUCK']);
 
         return [$shipment, $tank, $truck];
@@ -39,10 +39,11 @@ class CargoTimelineTest extends TestCase
     public function test_shuffled_batch_is_sorted_before_applying_stock(): void
     {
         [$shipment, $tank, $truck] = $this->cargo();
+        $shipment->update(['expected_ml' => 200000000]);
         $service = app(CargoService::class);
         $events = [
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '99500', '2026-01-01 12:00:00'),
-            $this->event($shipment, $tank, $truck, 'outbound', 'B', '99500', '2026-01-01 10:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '100000', '2026-01-01 12:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'B', '100000', '2026-01-01 10:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'A', '100000', '2026-01-01 10:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'D', '100000', '2026-01-01 11:00:00'),
         ];
@@ -60,11 +61,11 @@ class CargoTimelineTest extends TestCase
         [$shipment, $tank, $truck] = $this->cargo();
         $service = app(CargoService::class);
         $service->record($this->event($shipment, $tank, $truck, 'inbound', 'A', '1000', '2026-01-01 10:00:00'));
-        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'D', '995', '2026-01-01 13:00:00'));
+        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'D', '1000', '2026-01-01 13:00:00'));
         $history = Movement::all()->toArray();
 
         $service->recordBatch([
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '995', '2026-01-01 12:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '1000', '2026-01-01 12:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'B', '1000', '2026-01-01 11:00:00'),
         ]);
 
@@ -76,9 +77,10 @@ class CargoTimelineTest extends TestCase
     public function test_late_receipt_that_overflows_historical_capacity_rolls_back(): void
     {
         [$shipment, $tank, $truck] = $this->cargo();
+        $shipment->update(['expected_ml' => 101000000]);
         $service = app(CargoService::class);
         $service->record($this->event($shipment, $tank, $truck, 'inbound', 'A', '100000', '2026-01-01 10:00:00'));
-        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'C', '99500', '2026-01-01 12:00:00'));
+        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'C', '100000', '2026-01-01 12:00:00'));
 
         try {
             $service->record($this->event($shipment, $tank, $truck, 'inbound', 'B', '1', '2026-01-01 11:00:00'));
@@ -97,10 +99,10 @@ class CargoTimelineTest extends TestCase
         $service->record($this->event($shipment, $tank, $truck, 'outbound', 'C', '900', '2026-01-01 12:00:00'));
 
         try {
-            $service->record($this->event($shipment, $tank, $truck, 'outbound', 'B', '100', '2026-01-01 11:00:00'));
+            $service->record($this->event($shipment, $tank, $truck, 'outbound', 'B', '101', '2026-01-01 11:00:00'));
             $this->fail('Expected a historical stock conflict.');
         } catch (CargoException) {
-            $this->assertSame(95000, $tank->fresh()->balance_ml);
+            $this->assertSame(100000, $tank->fresh()->balance_ml);
             $this->assertDatabaseCount('movements', 2);
         }
     }
@@ -111,7 +113,7 @@ class CargoTimelineTest extends TestCase
         try {
             app(CargoService::class)->recordBatch([
                 $this->event($shipment, $tank, $truck, 'inbound', 'A', '1000', '2026-01-01 10:00:00'),
-                $this->event($shipment, $tank, $truck, 'outbound', 'B', '996', '2026-01-01 11:00:00'),
+                $this->event($shipment, $tank, $truck, 'outbound', 'B', '1001', '2026-01-01 11:00:00'),
             ]);
             $this->fail('Expected batch rollback.');
         } catch (CargoException) {
@@ -128,7 +130,7 @@ class CargoTimelineTest extends TestCase
         $service = app(CargoService::class);
         $service->recordBatch([
             $this->event($shipment, $tank, $truck, 'inbound', 'A', '1000', '2026-01-01 10:00:00'),
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '995', '2026-01-01 11:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '1000', '2026-01-01 11:00:00'),
             $this->event($otherShipment, $tank, $truck, 'inbound', 'D', '1000', '2026-01-01 12:00:00'),
         ]);
 
@@ -136,7 +138,7 @@ class CargoTimelineTest extends TestCase
             $service->record($this->event($shipment, $tank, $truck, 'inbound', 'B', '1', '2026-01-01 10:30:00'));
             $this->fail('Expected a historical commodity conflict.');
         } catch (CargoException) {
-            $this->assertSame(995000, $tank->fresh()->balance_ml);
+            $this->assertSame(1000000, $tank->fresh()->balance_ml);
             $this->assertSame($otherCommodity->id, $tank->fresh()->commodity_id);
             $this->assertDatabaseCount('movements', 3);
         }
