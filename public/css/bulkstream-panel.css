@@ -1,9 +1,14 @@
 /* Provisional Bulkstream palette: deep teal, teal, white, light grey and dark grey. */
 .fi-body { background: #f4f6f6; color: #263238; }
 .fi-topbar, .fi-sidebar-header { border-top: 4px solid #004d4d; }
+.fi-sidebar.fi-sidebar { background: #eaf1f0; border-inline-end: 1px solid #d4e2e0; }
 .fi-logo { color: #004d4d; font-weight: 800; letter-spacing: -.03em; }
 .fi-sidebar-item.fi-active > .fi-sidebar-item-btn { background: #e0efed; }
 .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label { color: #004d4d; }
+.fi-sidebar-nav { gap: .75rem; padding-top: .75rem; padding-bottom: .75rem; }
+.fi-sidebar-nav-groups { gap: .75rem; }
+.fi-sidebar-group-items { gap: .125rem; }
+.fi-sidebar-item-btn { padding-top: .4rem; padding-bottom: .4rem; }
 .cargo-dashboard { overflow: hidden; border: 1px solid #dce6e5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 4px #004d4d0d; }
 .cargo-dashboard__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1.5rem; }
 .cargo-dashboard__intro h2 { font-size: 1.4rem; font-weight: 700; line-height: 1.2; margin: .3rem 0 .45rem; }

@@ -42,13 +42,13 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->navigationItems([
-                NavigationItem::make('Vessel Discharge (Inbound Cargo)')
+                NavigationItem::make('Inbound Cargo')
                     ->group('Cargo workflow')
                     ->icon('heroicon-o-inbox-arrow-down')
                     ->sort(4)
                     ->isActiveWhen(fn (): bool => original_request()->routeIs(MovementResource::getRouteBaseName().'.vessel-discharge'))
                     ->url(fn (): string => MovementResource::getUrl('vessel-discharge')),
-                NavigationItem::make('Truck Delivery (Outbound Cargo)')
+                NavigationItem::make('Outbound Cargo')
                     ->group('Cargo workflow')
                     ->icon('heroicon-o-truck')
                     ->sort(5)

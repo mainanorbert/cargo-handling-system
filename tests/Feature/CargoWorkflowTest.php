@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\Vessel;
 use App\Services\CargoService;
 use Filament\Actions\Testing\TestAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Support\Enums\TextSize;
 use Filament\Tables\Columns\TextColumn;
@@ -365,10 +366,10 @@ class CargoWorkflowTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         Livewire::withQueryParams(['action' => 'create'])->test(ManageShipments::class)->call('mountDefaultActions')->assertSet('mountedActions.0.name', 'create');
-        $this->get('/admin/movements/vessel-discharge')->assertOk()->assertSee('Vessel Discharge (Inbound Cargo)');
+        $this->get('/admin/movements/vessel-discharge')->assertOk()->assertSee('Inbound Cargo');
         Livewire::test(RecordVesselDischarge::class)->mountAction('record')->assertMountedActionModalSee('Discharged quantity (L)')->assertMountedActionModalSee('Inbound shipment');
-        $this->get('/admin/movements/truck-delivery')->assertOk()->assertSee('Truck Delivery (Outbound Cargo)');
-        Livewire::test(RecordTruckDelivery::class)->mountAction('record')->assertMountedActionModalSee('Delivery quantity (L)');
+        $this->get('/admin/movements/truck-delivery')->assertOk()->assertSee('Outbound Cargo');
+        Livewire::test(RecordTruckDelivery::class)->mountAction('record')->assertMountedActionModalSee('Delivery quantity (L)')->assertMountedActionModalSee('Cab plate')->assertMountedActionModalSee('Trailer plate')->assertMountedActionModalSee('Commodity being transported');
     }
 
     public function test_operator_records_delivery_from_its_page(): void
@@ -382,13 +383,33 @@ class CargoWorkflowTest extends TestCase
         $this->assertTrue(Str::isUuid($reference));
 
         $page
-            ->setActionData(['truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->setActionData(['truck_id' => $truck->id, 'commodity_id' => $shipment->commodity_id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00'])
             ->assertMountedActionModalSee('Projected balance after delivery: 500.000 L.')
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
         $this->assertSame(500000, $tank->fresh()->balance_ml);
         $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'outbound', 'loss_ml' => 0]);
+    }
+
+    public function test_delivery_tank_choices_follow_selected_commodity(): void
+    {
+        [$shipment, $tank] = $this->setupCargo();
+        $this->inbound($shipment, $tank, 'E1', '1000');
+        $otherCommodity = Commodity::create(['code' => 'PFAD', 'description' => 'Palm Fatty Acid Distillate']);
+        $otherTank = Tank::create(['name' => 'Other tank', 'capacity_ml' => 1000000]);
+        $otherTank->forceFill(['commodity_id' => $otherCommodity->id, 'balance_ml' => 100000])->save();
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(RecordTruckDelivery::class)
+            ->mountAction('record')
+            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => $component->getOptions() === [])
+            ->setActionData(['commodity_id' => $shipment->commodity_id])
+            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => array_keys($component->getOptions()) === [$tank->id])
+            ->setActionData(['tank_id' => $tank->id])
+            ->setActionData(['commodity_id' => $otherCommodity->id])
+            ->assertSchemaComponentStateSet('tank_id', null)
+            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => array_keys($component->getOptions()) === [$otherTank->id]);
     }
 
     public function test_discharge_page_displays_overflow_error_without_changing_stock(): void

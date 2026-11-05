@@ -111,7 +111,7 @@ class CargoService
                         'event_reference' => $event['event_reference'],
                         'type' => $event['type'], 'status' => 'applied',
                         'tank_id' => $tanks->get($event['tank_id'])->id,
-                        'commodity_id' => $shipment?->commodity_id,
+                        'commodity_id' => $inbound ? $shipment?->commodity_id : ($event['commodity_id'] ?? null),
                         'shipment_id' => $shipment?->id,
                         'truck_id' => $inbound ? null : $event['truck_id'],
                         'source_ml' => $quantity, 'loss_ml' => 0,
@@ -163,6 +163,7 @@ class CargoService
             'event_reference' => ['required', 'string', 'max:255'], 'type' => ['required', 'in:inbound,outbound'],
             'tank_id' => ['required', 'integer', 'exists:tanks,id'], 'shipment_id' => ['required_if:type,inbound', 'nullable', 'integer', 'exists:shipments,id'],
             'truck_id' => ['required_if:type,outbound', 'nullable', 'integer', 'exists:trucks,id'], 'quantity_litres' => ['required', 'string'], 'occurred_at' => ['required', 'date'],
+            'commodity_id' => ['nullable', 'integer', 'exists:commodities,id'],
         ])->validate();
         self::millilitres($data['quantity_litres']);
 
@@ -198,7 +199,7 @@ class CargoService
                 if ($quantity > $balance) {
                     throw new CargoException('The delivery exceeds the available stock.');
                 }
-                if ($movement->exists && (int) $movement->commodity_id !== $commodityId) {
+                if ($movement->commodity_id !== null && (int) $movement->commodity_id !== $commodityId) {
                     throw new CargoException('The event conflicts with the commodity of an existing delivery.');
                 }
                 if (! $movement->exists) {

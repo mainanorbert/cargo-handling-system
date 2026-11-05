@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Movements\Pages;
 
 use App\Exceptions\CargoException;
 use App\Filament\Resources\Movements\MovementResource;
+use App\Models\Commodity;
 use App\Models\Shipment;
 use App\Models\Tank;
 use App\Models\Truck;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -44,8 +46,10 @@ abstract class RecordMovement extends ManageRecords
                 $shipment = $this->findShipmentWithDischargeTotal($state);
                 $set('quantity_litres', $shipment ? $this->formatLitresForInput($shipment->remainingMillilitres()) : null);
             })->visible($type === 'inbound'),
-            Select::make('truck_id')->label('Truck')->options(fn () => Truck::pluck('can_plate', 'id'))->searchable()->required()->visible($type === 'outbound'),
-            Select::make('tank_id')->label('Shore tank')->options(fn () => Tank::all()->mapWithKeys(fn ($tank) => [$tank->id => $tank->name.' — '.number_format($tank->balance_ml / 1000, 3).' / '.number_format($tank->capacity_ml / 1000, 3).' L']))->searchable()->required()->live(),
+            Select::make('truck_id')->label('Cab plate')->options(fn () => Truck::pluck('can_plate', 'id'))->searchable()->required()->live()->visible($type === 'outbound'),
+            Placeholder::make('trailer_plate')->label('Trailer plate')->content(fn (Get $get): string => Truck::find($get('truck_id'))?->trail_plate ?: 'No trailer plate recorded')->visible($type === 'outbound'),
+            Select::make('commodity_id')->label('Commodity being transported')->options(fn () => Commodity::pluck('code', 'id'))->searchable()->required()->live()->afterStateUpdated(fn (Set $set) => $set('tank_id', null))->visible($type === 'outbound'),
+            Select::make('tank_id')->label('Shore tank')->options(fn (Get $get) => Tank::query()->when($type === 'outbound', fn (Builder $query) => $query->whereNotNull('commodity_id')->where('commodity_id', $get('commodity_id')))->get()->mapWithKeys(fn ($tank) => [$tank->id => $tank->name.' — '.number_format($tank->balance_ml / 1000, 3).' / '.number_format($tank->capacity_ml / 1000, 3).' L']))->searchable()->required()->live(),
             TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->maxValue(function (Get $get) use ($type): float|string|null {
                 if ($type === 'inbound') {
                     $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
@@ -62,7 +66,7 @@ abstract class RecordMovement extends ManageRecords
                 return null;
             })->step(0.001)->live(onBlur: true)->helperText(function (Get $get) use ($type): HtmlString|string|null {
                 if ($type === 'outbound') {
-                    return 'No inbound loss is applied to deliveries.';
+                    return null;
                 }
                 $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
                 if (! $shipment) {
@@ -75,22 +79,22 @@ abstract class RecordMovement extends ManageRecords
                     .$this->formatLitres($shipment->dischargedMillilitres()).' L ('.$shipment->formattedDischargePercentage().')</span>'
                 );
             }),
-            Placeholder::make('preview')->label('Estimated delivery and tank balance')->visible($type === 'outbound')->content(function (Get $get): string {
+            Placeholder::make('preview')->label('Projected balance')->visible($type === 'outbound')->content(function (Get $get): string {
                 try {
                     $quantity = CargoService::millilitres((string) $get('quantity_litres'));
                 } catch (CargoException) {
-                    return 'Enter a valid quantity and select a tank to preview.';
+                    return '—';
                 }
                 $tank = $this->findTank($get('tank_id'));
                 if (! $tank) {
-                    return 'Select a tank to preview.';
+                    return '—';
                 }
                 if ($quantity > (int) $tank->balance_ml) {
                     return 'Delivery exceeds available tank stock of '.$this->formatLitres((int) $tank->balance_ml).' L.';
                 }
                 $projected = $tank->balance_ml - $quantity;
 
-                return 'Projected balance after delivery: '.number_format($projected / 1000, 3).' L. Final checks validate the full event timeline when saved.';
+                return 'Projected balance after delivery: '.number_format($projected / 1000, 3).' L.';
             }),
             DateTimePicker::make('occurred_at')->label('Event time')->required()->default(now()),
         ];
@@ -112,7 +116,8 @@ abstract class RecordMovement extends ManageRecords
                 ->modalHeading($this->getTitle())
                 ->modalSubmitActionLabel('Save movement')
                 ->visible(fn (): bool => MovementResource::canCreate())
-                ->schema($this->movementFields())
+                ->modalWidth('3xl')
+                ->schema([Grid::make(['default' => 1, 'sm' => 2])->schema($this->movementFields())])
                 ->mountUsing(function (Schema $schema): void {
                     $this->eventReference = (string) Str::uuid();
                     $schema->fill();

@@ -62,7 +62,7 @@ class MovementResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->defaultSort(fn (Builder $query): Builder => $query->orderByDesc('occurred_at')->orderByDesc('event_reference'))->columns([
-            TextColumn::make('shipment_or_truck')->label('Shipment / truck')->state(fn (Movement $record): string => $record->shipment?->reference ?? $record->truck?->can_plate ?? '—')->limit(20)->tooltip(fn (Movement $record): string => $record->shipment?->reference ?? $record->truck?->can_plate ?? '—'),
+            TextColumn::make('shipment_or_truck')->label('Truck')->state(fn (Movement $record): string => $record->truck?->can_plate ?? '—')->limit(20)->tooltip(fn (Movement $record): string => $record->truck?->can_plate ?? '—'),
             TextColumn::make('tank.name')->label('Tank')->visibleFrom('lg'),
             TextColumn::make('quantity_ml')->label('Net quantity (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
             TextColumn::make('occurred_at')->label('Event time')->dateTime('d M H:i')->sortable(),

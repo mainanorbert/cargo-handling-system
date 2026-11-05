@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 
 class RecordVesselDischarge extends RecordMovement
 {
-    protected static ?string $title = 'Vessel Discharge (Inbound Cargo)';
+    protected static ?string $title = 'Inbound Cargo';
 
     protected function getMovementType(): string
     {
@@ -44,7 +44,7 @@ class RecordVesselDischarge extends RecordMovement
             ->extraAttributes(['class' => 'vessel-discharge-table'])
             ->stackedOnMobile()
             ->columns([
-                TextColumn::make('reference')->label('Shipment')->formatStateUsing(fn (string $state): string => Str::take($state, 7))->size(TextSize::ExtraSmall)->width('10%')->searchable()->sortable(),
+                TextColumn::make('reference')->label('Shipment')->formatStateUsing(fn (string $state): string => Str::limit($state, 7))->tooltip(fn (string $state): string => $state)->size(TextSize::ExtraSmall)->width('10%')->searchable()->sortable(),
                 TextColumn::make('expected_ml')->label('Shipped Qty')->headerTooltip('Shipped quantity before discharge (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3))->size(TextSize::ExtraSmall)->width('17%')->wrapHeader(),
                 TextColumn::make('discharged_ml')->label('Offloaded')->headerTooltip('Offloaded so far (L)')->state(fn (Shipment $record): int => $record->dischargedMillilitres())->formatStateUsing(fn ($state): string => number_format($state / 1000, 3))->size(TextSize::ExtraSmall)->width('16%')->wrapHeader(),
                 TextColumn::make('remaining_ml')->label('Remaining')->headerTooltip('Remaining quantity (L)')->state(fn (Shipment $record): int => $record->remainingMillilitres())->formatStateUsing(fn ($state): string => number_format($state / 1000, 3))->size(TextSize::ExtraSmall)->width('16%')->wrapHeader(),
