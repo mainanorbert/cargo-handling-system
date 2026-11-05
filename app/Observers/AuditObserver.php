@@ -6,6 +6,7 @@ use App\Models\AuditEntry;
 use App\Models\Movement;
 use App\Models\Shipment;
 use App\Models\Tank;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 
@@ -19,6 +20,9 @@ class AuditObserver
     public function updated(Model $model): void
     {
         $new = $this->values($model, $model->getChanges());
+        if ($model instanceof User && array_key_exists('password', $model->getChanges())) {
+            $new['password_changed'] = true;
+        }
         if ($new === []) {
             return;
         }
@@ -32,7 +36,7 @@ class AuditObserver
 
     private function values(Model $model, array $values): array
     {
-        $allowed = $model->getFillable();
+        $allowed = $model instanceof User ? ['name', 'email', 'email_verified_at'] : $model->getFillable();
         if ($model instanceof Tank) {
             $allowed = [...$allowed, 'balance_ml', 'commodity_id'];
         }
@@ -47,6 +51,7 @@ class AuditObserver
             $model instanceof Movement => 'Truck delivery',
             $model instanceof Shipment => 'Shipment',
             $model instanceof Tank => 'Tank storage',
+            $model instanceof User => 'User accounts',
             default => 'Setup',
         };
         AuditEntry::create([

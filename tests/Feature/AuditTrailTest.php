@@ -41,4 +41,33 @@ class AuditTrailTest extends TestCase
     {
         $this->get('/admin/audit-entries')->assertRedirect('/admin/login');
     }
+
+    public function test_user_changes_are_audited_without_credentials(): void
+    {
+        $actor = User::factory()->create();
+        $this->actingAs($actor);
+        $user = User::factory()->create(['name' => 'Original user', 'email' => 'original@example.test']);
+        $user->update(['name' => 'Updated user', 'password' => 'new-secret-value']);
+
+        $entry = AuditEntry::where('subject_type', 'User')->where('subject_id', $user->id)->where('action', 'updated')->sole();
+        $this->assertSame($actor->id, $entry->actor_id);
+        $this->assertSame('Original user', $entry->old_values['name']);
+        $this->assertSame('Updated user', $entry->new_values['name']);
+        $this->assertTrue($entry->new_values['password_changed']);
+        $this->assertArrayNotHasKey('password', $entry->new_values);
+        $this->assertArrayNotHasKey('password', $entry->old_values);
+        $this->assertStringNotContainsString('new-secret-value', $entry->toJson());
+    }
+
+    public function test_deletion_is_audited_with_previous_values(): void
+    {
+        $actor = User::factory()->create();
+        $this->actingAs($actor);
+        $tank = Tank::create(['name' => 'Removed tank', 'capacity_ml' => 100000]);
+        $tank->delete();
+
+        $entry = AuditEntry::where('subject_type', 'Tank')->where('subject_id', $tank->id)->where('action', 'deleted')->sole();
+        $this->assertSame($actor->id, $entry->actor_id);
+        $this->assertSame('Removed tank', $entry->old_values['name']);
+    }
 }
