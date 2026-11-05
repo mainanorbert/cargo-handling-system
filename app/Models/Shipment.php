@@ -89,6 +89,14 @@ class Shipment extends Model
         return self::formattedPercentage($this->dischargedMillilitres(), (int) $this->expected_ml);
     }
 
+    public function formattedUnaccountedPercentage(): string
+    {
+        return self::formattedPercentage(
+            max(0, (int) $this->expected_ml - $this->dischargedMillilitres()),
+            (int) $this->expected_ml,
+        );
+    }
+
     public function meetsDischargeExpectation(): bool
     {
         $basisPoints = $this->dischargePercentageBasisPoints();

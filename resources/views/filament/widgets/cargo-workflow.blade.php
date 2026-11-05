@@ -2,35 +2,26 @@
     <section class="cargo-dashboard" aria-labelledby="cargo-dashboard-heading">
         <div class="cargo-dashboard__intro">
             <div>
-                <p class="cargo-dashboard__eyebrow">Operations dashboard</p>
-                <h2 id="cargo-dashboard-heading">Cargo storage overview</h2>
-                <p>Live inventory, available capacity and recent cargo activity.</p>
+                <h2 id="cargo-dashboard-heading">Cargo operations</h2>
+                <p>Live tank stock, available capacity and recent activity.</p>
             </div>
             <a href="{{ $movementUrl }}">View movements <span aria-hidden="true">→</span></a>
         </div>
 
-        <section class="cargo-dashboard__section" aria-labelledby="commodity-storage-heading">
-            <div class="cargo-dashboard__section-heading">
-                <h3 id="commodity-storage-heading">Storage by commodity</h3>
-                <span>Allocated tank capacity and live stock</span>
+        <dl class="cargo-dashboard__summary" aria-label="Operational summary">
+            <div><dt>Commodities</dt><dd>{{ $commodityCount }}</dd></div>
+            <div><dt>Inbound shipments</dt><dd>{{ $inboundShipmentCount }}</dd></div>
+            <div>
+                <dt>Discharge standard met</dt>
+                <dd>{{ number_format($shipmentStandardMetPercentageBasisPoints / 100, 2) }}%</dd>
+                <span>{{ $shipmentsMeetingStandardCount }} of {{ $inboundShipmentCount }} shipments</span>
             </div>
-            <div class="cargo-dashboard__commodities">
-                @foreach ($commodities as $commodity)
-                    <article class="cargo-dashboard__commodity">
-                        <div>
-                            <h4>{{ $commodity['code'] }}</h4>
-                            <p>{{ $commodity['description'] }}</p>
-                        </div>
-                        <dl>
-                            <div><dt>Tanks</dt><dd>{{ $commodity['tank_count'] }}</dd></div>
-                            <div><dt>Capacity</dt><dd>{{ number_format($commodity['capacity_ml'] / 1000, 3) }} L</dd></div>
-                            <div><dt>Stock</dt><dd>{{ number_format($commodity['balance_ml'] / 1000, 3) }} L</dd></div>
-                            <div><dt>Available</dt><dd>{{ number_format($commodity['available_ml'] / 1000, 3) }} L</dd></div>
-                        </dl>
-                    </article>
-                @endforeach
-            </div>
-        </section>
+            <div><dt>Tanks</dt><dd>{{ $tankCount }}</dd></div>
+            <div><dt>Trucks</dt><dd>{{ $truckCount }}</dd></div>
+            <div><dt>Tank stock</dt><dd>{{ number_format($balanceMl / 1000, 3) }} L</dd></div>
+            <div><dt>Available capacity</dt><dd>{{ number_format($availableMl / 1000, 3) }} L</dd></div>
+            <div><dt>Exceptions</dt><dd>{{ $exceptionsNeedingReview }}</dd></div>
+        </dl>
 
         <div class="cargo-dashboard__grid">
             <section class="cargo-dashboard__section" aria-labelledby="tank-status-heading">

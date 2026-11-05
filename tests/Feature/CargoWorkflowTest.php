@@ -74,7 +74,7 @@ class CargoWorkflowTest extends TestCase
             $this->inbound($shipment, $otherTank, 'TANK-B-EXCESS', '400', '2026-01-01 11:00:00');
             $this->fail('Expected 900 L plus 400 L to exceed the shipment quantity.');
         } catch (ShipmentQuantityExceededException $exception) {
-            $this->assertSame('The discharged quantity exceeds the shipment remaining quantity of 100.000 L.', $exception->getMessage());
+            $this->assertSame('Quantity cannot exceed the amount remaining in the selected shipment (100.000 L remains).', $exception->getMessage());
         }
 
         $this->assertSame(0, $otherTank->fresh()->balance_ml);
@@ -92,7 +92,7 @@ class CargoWorkflowTest extends TestCase
             $this->inbound($shipment, $otherTank, 'EXCESS', '1', '2026-01-01 12:00:00');
             $this->fail('Expected the shipment quantity limit to be enforced.');
         } catch (ShipmentQuantityExceededException $exception) {
-            $this->assertSame('The discharged quantity exceeds the shipment remaining quantity of 0.000 L.', $exception->getMessage());
+            $this->assertSame('Quantity cannot exceed the amount remaining in the selected shipment (0.000 L remains).', $exception->getMessage());
         }
 
         $this->assertSame(100000, $otherTank->fresh()->balance_ml);
@@ -104,11 +104,12 @@ class CargoWorkflowTest extends TestCase
             ->assertTableColumnExists('reference', fn (TextColumn $column): bool => $column->formatState($column->getState()) === 'SHIP-DE', $shipment)
             ->assertTableColumnExists('expected_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Shipped Qty' && $column->getSize($column->getState()) === TextSize::ExtraSmall && $column->getWidth() === '17%', $shipment)
             ->assertTableColumnExists('discharged_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Offloaded' && $column->getWidth() === '16%', $shipment)
-            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getLabel() === 'Progress' && $column->getWidth() === '13%', $shipment)
-            ->assertTableColumnExists('remaining_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Remaining' && $column->getWidth() === '16%', $shipment)
+            ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getLabel() === 'Offloaded (%)' && $column->getWidth() === '13%', $shipment)
+            ->assertTableColumnExists('unaccounted_percentage', fn (TextColumn $column): bool => $column->getLabel() === 'Unaccounted (%)' && $column->getWidth() === '16%', $shipment)
             ->assertTableColumnExists('allocations', fn (TextColumn $column): bool => $column->getLabel() === 'Tanks' && $column->getVisibleFrom() === null && $column->getWidth() === '20%', $shipment)
             ->assertTableColumnStateSet('allocations', 'A, B', $shipment)
             ->assertTableColumnStateSet('discharge_percentage', '100.00%', $shipment)
+            ->assertTableColumnStateSet('unaccounted_percentage', '0.00%', $shipment)
             ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'success' && $column->getTooltip($column->getState()) === 'Allowed range', $shipment)
             ->assertTableColumnDoesNotExist('expectation')
             ->mountAction(TestAction::make('view')->table($shipment))
@@ -339,7 +340,8 @@ class CargoWorkflowTest extends TestCase
             ->assertMountedActionModalDontSee('After this entry:')
             ->setActionData(['tank_id' => $otherTank->id, 'quantity_litres' => '101', 'occurred_at' => '2026-01-01 11:00:00'])
             ->callMountedAction()
-            ->assertHasActionErrors(['quantity_litres']);
+            ->assertHasActionErrors(['quantity_litres'])
+            ->assertMountedActionModalSee('Quantity cannot exceed the amount remaining in the selected shipment.');
 
         $this->assertSame(0, $otherTank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
@@ -353,11 +355,11 @@ class CargoWorkflowTest extends TestCase
         $this->actingAs(User::factory()->create());
 
         $this->get('/admin')->assertOk()->assertSeeInOrder([
-            'Registered shipments', 'Inbound discharges', 'Outbound deliveries', 'Total tank capacity', 'Current tank stock', 'Available capacity', 'Exceptions needing review',
-        ])->assertSee('Storage by commodity')
-            ->assertSee('CPO')
-            ->assertSee('CPOL')
-            ->assertSee('PFAD')
+            'Commodities', 'Inbound shipments', 'Discharge standard met', 'Tanks', 'Trucks', 'Tank stock', 'Available capacity', 'Exceptions', 'Tank status', 'Recent movements',
+        ])->assertDontSee('Registered shipments')
+            ->assertDontSee('Inbound discharges')
+            ->assertDontSee('Outbound deliveries')
+            ->assertDontSee('Storage by commodity')
             ->assertDontSee('Follow the cargo journey');
     }
 
@@ -384,7 +386,6 @@ class CargoWorkflowTest extends TestCase
 
         $page
             ->setActionData(['truck_id' => $truck->id, 'commodity_id' => $shipment->commodity_id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00'])
-            ->assertMountedActionModalSee('Projected balance after delivery: 500.000 L.')
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
@@ -426,7 +427,7 @@ class CargoWorkflowTest extends TestCase
             ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '100001', 'occurred_at' => '2026-01-01 10:00:00'])
             ->callMountedAction()
             ->assertHasActionErrors(['quantity_litres'])
-            ->assertMountedActionModalSee('The received quantity exceeds the tank capacity.')
+            ->assertMountedActionModalSee('Quantity cannot exceed the available capacity of tank "A" (100,000.000 L available).')
             ->assertSet('eventReference', $reference);
 
         $this->assertSame(0, $tank->fresh()->balance_ml);

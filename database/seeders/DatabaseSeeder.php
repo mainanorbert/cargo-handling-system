@@ -9,7 +9,6 @@ use App\Models\Truck;
 use App\Models\User;
 use App\Models\Vessel;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -24,7 +23,10 @@ class DatabaseSeeder extends Seeder
         Tank::firstOrCreate(['name' => 'Tank B'], ['capacity_ml' => 200000000]);
         Shipment::firstOrCreate(['reference' => 'SHIP-DEMO-001'], ['origin' => 'Port of origin', 'vessel_id' => $vessel->id, 'commodity_id' => Commodity::where('code', 'CPO')->firstOrFail()->id, 'expected_ml' => 100000000]);
         if (app()->environment('local', 'testing')) {
-            User::firstOrCreate(['email' => 'demo@example.com'], ['name' => 'Demo Operator', 'password' => Hash::make('password')]);
+            User::updateOrCreate(
+                ['email' => 'bulk_admin@gmail'],
+                ['name' => 'Bulk Admin', 'password' => 'admin@2026'],
+            );
         }
     }
 }

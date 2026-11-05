@@ -101,7 +101,8 @@ class CargoService
                     $quantity = self::millilitres($event['quantity_litres']);
                     if ($shipment && $quantity > $remainingByShipment[$shipment->id]) {
                         throw new ShipmentQuantityExceededException(
-                            'The discharged quantity exceeds the shipment remaining quantity of '.number_format($remainingByShipment[$shipment->id] / 1000, 3).' L.'
+                            'Quantity cannot exceed the amount remaining in the selected shipment ('
+                            .number_format($remainingByShipment[$shipment->id] / 1000, 3).' L remains).'
                         );
                     }
                     if ($shipment) {
@@ -188,10 +189,15 @@ class CargoService
             }
             if ($movement->type === 'inbound') {
                 if ($balance > 0 && $commodityId !== (int) $movement->commodity_id) {
-                    throw new CargoException('The tank contains a different commodity.');
+                    throw new CargoException(
+                        'Tank "'.$tank->name.'" already contains a different commodity. Empty the tank before receiving this shipment.'
+                    );
                 }
                 if ($quantity > (int) $tank->capacity_ml - $balance) {
-                    throw new TankCapacityException('The received quantity exceeds the tank capacity.');
+                    throw new TankCapacityException(
+                        'Quantity cannot exceed the available capacity of tank "'.$tank->name.'" ('
+                        .number_format(((int) $tank->capacity_ml - $balance) / 1000, 3).' L available).'
+                    );
                 }
                 $balance += $quantity;
                 $commodityId = (int) $movement->commodity_id;

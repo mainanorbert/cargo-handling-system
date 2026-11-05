@@ -10,12 +10,16 @@
 .fi-sidebar-group-items { gap: .125rem; }
 .fi-sidebar-item-btn { padding-top: .4rem; padding-bottom: .4rem; }
 .cargo-dashboard { overflow: hidden; border: 1px solid #dce6e5; border-radius: 1rem; background: #fff; box-shadow: 0 1px 4px #004d4d0d; }
-.cargo-dashboard__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1.5rem; }
-.cargo-dashboard__intro h2 { font-size: 1.4rem; font-weight: 700; line-height: 1.2; margin: .3rem 0 .45rem; }
-.cargo-dashboard__intro p:not(.cargo-dashboard__eyebrow) { color: #daeeee; font-size: .875rem; }
-.cargo-dashboard__eyebrow { color: #bce4df; font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.cargo-dashboard__intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; background: #004d4d; color: #fff; padding: 1rem 1.25rem; }
+.cargo-dashboard__intro h2 { font-size: 1.1rem; font-weight: 700; line-height: 1.2; margin: .15rem 0 .3rem; }
+.cargo-dashboard__intro p { color: #daeeee; font-size: .75rem; }
 .cargo-dashboard__intro a { flex-shrink: 0; border: 1px solid #78aaa6; border-radius: .5rem; padding: .45rem .7rem; color: #fff; font-size: .8rem; font-weight: 700; }
-.cargo-dashboard__section { padding: 1.25rem; }
+.cargo-dashboard__summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .5rem .75rem; margin: 0; padding: .75rem 1.25rem; border-bottom: 1px solid #e3eceb; background: #fbfdfd; }
+.cargo-dashboard__summary div { min-width: 0; }
+.cargo-dashboard__summary dt { color: #637475; font-size: .625rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cargo-dashboard__summary dd { margin-top: .1rem; color: #004d4d; font-size: .8rem; font-weight: 800; white-space: nowrap; }
+.cargo-dashboard__summary span { display: block; margin-top: .05rem; color: #637475; font-size: .625rem; }
+.cargo-dashboard__section { padding: 1rem; }
 .cargo-dashboard__section-heading { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
 .cargo-dashboard__section-heading h3 { color: #004d4d; font-size: .95rem; font-weight: 800; }
 .cargo-dashboard__section-heading span { color: #637475; font-size: .75rem; text-align: right; }
@@ -38,8 +42,9 @@
 .cargo-dashboard__utilisation span { display: block; height: 100%; margin: 0; background: #008080; }
 .cargo-dashboard__empty { color: #637475; font-size: .8rem; }
 .vessel-discharge-table .fi-ta-table { table-layout: fixed; }
-.vessel-discharge-table .fi-ta-header-cell { padding: .65rem .5rem; font-size: .75rem; line-height: 1rem; }
-.vessel-discharge-table .fi-ta-text:not(.fi-inline) { padding: .65rem .5rem; }
-.vessel-discharge-table .fi-ta-cell:has(.fi-ta-actions) { padding: .65rem .5rem; }
+.vessel-discharge-table .fi-ta-header-cell { padding: .45rem .35rem; font-size: .625rem; line-height: .875rem; white-space: nowrap; }
+.vessel-discharge-table .fi-ta-text:not(.fi-inline), .vessel-discharge-table .fi-ta-cell:has(.fi-ta-actions) { padding: .45rem .35rem; }
+.vessel-discharge-table .fi-ta-cell { white-space: nowrap; }
+.vessel-discharge-table .fi-ta-text-item { overflow: hidden; font-size: .6875rem; line-height: 1rem; text-overflow: ellipsis; }
 @media (max-width: 900px) { .cargo-dashboard__commodities { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .cargo-dashboard__intro, .cargo-dashboard__section-heading { flex-direction: column; } .cargo-dashboard__section-heading span { text-align: left; } .cargo-dashboard__grid { grid-template-columns: 1fr; } .cargo-dashboard__grid .cargo-dashboard__section + .cargo-dashboard__section { border-top: 1px solid #e3eceb; border-left: 0; } }

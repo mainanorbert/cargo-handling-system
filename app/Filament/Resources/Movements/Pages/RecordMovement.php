@@ -64,7 +64,11 @@ abstract class RecordMovement extends ManageRecords
                 }
 
                 return null;
-            })->step(0.001)->live(onBlur: true)->helperText(function (Get $get) use ($type): HtmlString|string|null {
+            })->validationMessages([
+                'max' => $type === 'inbound'
+                    ? 'Quantity cannot exceed the amount remaining in the selected shipment.'
+                    : 'Quantity cannot exceed the available stock in the selected tank.',
+            ])->step(0.001)->live(onBlur: true)->helperText(function (Get $get) use ($type): HtmlString|string|null {
                 if ($type === 'outbound') {
                     return null;
                 }
@@ -78,23 +82,6 @@ abstract class RecordMovement extends ManageRecords
                     .$this->formatLitres((int) $shipment->expected_ml).' L; offloaded: '
                     .$this->formatLitres($shipment->dischargedMillilitres()).' L ('.$shipment->formattedDischargePercentage().')</span>'
                 );
-            }),
-            Placeholder::make('preview')->label('Projected balance')->visible($type === 'outbound')->content(function (Get $get): string {
-                try {
-                    $quantity = CargoService::millilitres((string) $get('quantity_litres'));
-                } catch (CargoException) {
-                    return '—';
-                }
-                $tank = $this->findTank($get('tank_id'));
-                if (! $tank) {
-                    return '—';
-                }
-                if ($quantity > (int) $tank->balance_ml) {
-                    return 'Delivery exceeds available tank stock of '.$this->formatLitres((int) $tank->balance_ml).' L.';
-                }
-                $projected = $tank->balance_ml - $quantity;
-
-                return 'Projected balance after delivery: '.number_format($projected / 1000, 3).' L.';
             }),
             DateTimePicker::make('occurred_at')->label('Event time')->required()->default(now()),
         ];
