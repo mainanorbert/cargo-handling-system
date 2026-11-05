@@ -2,11 +2,10 @@
 
 namespace App\Filament\Resources\Reports\Pages;
 
+use App\Filament\Resources\Reports\MovementReportResource;
 use App\Filament\Resources\Reports\ReportResource;
-use App\Models\Movement;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListReports extends ListRecords
 {
@@ -14,48 +13,26 @@ class ListReports extends ListRecords
 
     public function getHeading(): string
     {
-        return 'Cargo reports';
+        return 'Reports';
     }
 
     public function getSubheading(): string
     {
-        return 'Tanks shown are those recorded on each movement; current stock may have changed.';
+        return 'Filter shipments to create a report.';
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('download')
-                ->label('Download CSV')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->action(function (): StreamedResponse {
+            Action::make('movements')->label('View movements')->icon('heroicon-o-list-bullet')
+                ->url(MovementReportResource::getUrl()),
+            Action::make('report')->label('Create report')->icon('heroicon-o-printer')
+                ->action(function (): void {
                     abort_unless(ReportResource::canViewAny(), 403);
-                    $query = $this->getFilteredSortedTableQuery();
-
-                    return response()->streamDownload(function () use ($query): void {
-                        $file = fopen('php://output', 'w');
-                        fputcsv($file, ['Event time (UTC)', 'Stage', 'Event reference', 'Shipment', 'Vessel', 'Truck', 'Tank', 'Commodity', 'Source (L)', 'Loss (L)', 'Received / delivered (L)', 'Status', 'Recorded at (UTC)'], escape: '');
-                        foreach ($query->lazy() as $movement) {
-                            /** @var Movement $movement */
-                            $values = [
-                                $movement->occurred_at?->format('Y-m-d H:i:s'), $movement->type, $movement->event_reference,
-                                $movement->shipment?->reference, $movement->shipment?->vessel?->name, $movement->truck?->can_plate,
-                                $movement->tank?->name, $movement->commodity?->code, ReportResource::litres((int) $movement->source_ml),
-                                ReportResource::litres((int) $movement->loss_ml), ReportResource::litres((int) $movement->quantity_ml),
-                                $movement->status, $movement->received_at?->format('Y-m-d H:i:s'),
-                            ];
-                            fputcsv($file, array_map($this->safeCsvValue(...), $values), escape: '');
-                        }
-                        fclose($file);
-                    }, 'cargo-report.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+                    session(['inbound_report_shipment_ids' => $this->getFilteredSortedTableQuery()->pluck('shipments.id')->all()]);
+                    session(['inbound_report_criteria' => ['scope' => 'filtered', 'filters' => $this->tableFilters, 'search' => $this->tableSearch]]);
+                    $this->redirect(route('inbound-reports.filtered'));
                 }),
         ];
-    }
-
-    private function safeCsvValue(?string $value): string
-    {
-        $value ??= '';
-
-        return preg_match('/^[\s\x00-\x1f]*[=+@\-]/u', $value) ? "'".$value : $value;
     }
 }

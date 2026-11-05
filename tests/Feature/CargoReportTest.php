@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Reports\Pages\ListMovementReports;
+use App\Filament\Resources\Reports\Pages\ListOutboundReports;
 use App\Filament\Resources\Reports\Pages\ListReports;
+use App\Models\AuditEntry;
 use App\Models\Commodity;
 use App\Models\Movement;
 use App\Models\Shipment;
@@ -11,6 +14,7 @@ use App\Models\Truck;
 use App\Models\User;
 use App\Models\Vessel;
 use App\Services\CargoService;
+use Filament\Tables\Columns\TextColumn;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -46,7 +50,7 @@ class CargoReportTest extends TestCase
         [$inbound, $outbound, $later] = $this->movements();
         $this->actingAs(User::factory()->create());
 
-        Livewire::test(ListReports::class)
+        Livewire::test(ListMovementReports::class)
             ->filterTable('type', 'inbound')
             ->assertCanSeeTableRecords([$inbound])
             ->assertCanNotSeeTableRecords([$outbound, $later])
@@ -72,7 +76,7 @@ class CargoReportTest extends TestCase
         [$inbound] = $this->movements();
         $this->actingAs(User::factory()->create());
 
-        $page = Livewire::test(ListReports::class)
+        $page = Livewire::test(ListMovementReports::class)
             ->filterTable('type', 'inbound')
             ->callAction('download')
             ->assertFileDownloaded('cargo-report.csv');
@@ -89,9 +93,104 @@ class CargoReportTest extends TestCase
         $inbound->shipment->vessel->update(['name' => '=1+1']);
         $this->actingAs(User::factory()->create());
 
-        $page = Livewire::test(ListReports::class)->filterTable('type', 'inbound')->callAction('download');
+        $page = Livewire::test(ListMovementReports::class)->filterTable('type', 'inbound')->callAction('download');
 
         $csv = base64_decode(data_get($page->effects, 'download.content'));
         $this->assertStringContainsString("'=1+1", $csv);
+    }
+
+    public function test_inbound_reports_group_receipts_by_shipment_and_include_details_in_print_view(): void
+    {
+        [$inbound] = $this->movements();
+        $shipment = $inbound->shipment;
+        $this->actingAs(User::factory()->create());
+        app(CargoService::class)->record(['type' => 'inbound', 'event_reference' => 'IN-2', 'shipment_id' => $shipment->id, 'tank_id' => $inbound->tank_id, 'quantity_litres' => '100', 'occurred_at' => '2026-01-01 12:00:00']);
+
+        Livewire::test(ListReports::class)
+            ->assertCanSeeTableRecords([$shipment])
+            ->assertSee('600.125')
+            ->assertSee('60.01%')
+            ->assertDontSee('IN-1');
+
+        $this->get(route('inbound-reports.show', $shipment))->assertOk()
+            ->assertSee('SHIP-1')->assertSee('IN-1')->assertSee('IN-2')
+            ->assertSee('600.125')->assertSee('60.01%');
+    }
+
+    public function test_filtered_inbound_report_only_includes_matching_shipments(): void
+    {
+        [$inbound] = $this->movements();
+        $other = Shipment::factory()->create(['reference' => 'OTHER', 'origin' => 'Elsewhere', 'vessel_id' => Vessel::factory()->create(['name' => 'Other Vessel'])->id, 'commodity_id' => $inbound->commodity_id, 'expected_ml' => 1000000]);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ListReports::class)
+            ->filterTable('vessel', $inbound->shipment->vessel_id)
+            ->assertCanSeeTableRecords([$inbound->shipment])
+            ->assertCanNotSeeTableRecords([$other])
+            ->callAction('report');
+
+        $this->get(route('inbound-reports.filtered'))->assertOk()->assertSee('SHIP-1')->assertDontSee('OTHER');
+    }
+
+    public function test_inbound_report_requires_authentication(): void
+    {
+        [$inbound] = $this->movements();
+        $this->get(route('inbound-reports.show', $inbound->shipment))->assertRedirect('/admin/login');
+    }
+
+    public function test_outbound_reports_filter_deliveries_and_print_only_filtered_results(): void
+    {
+        [$inbound, $outbound, $later] = $this->movements();
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ListOutboundReports::class)
+            ->assertCanSeeTableRecords([$outbound, $later])
+            ->assertCanNotSeeTableRecords([$inbound])
+            ->filterTable('commodity', $outbound->commodity_id)
+            ->filterTable('event_time', ['from' => null, 'until' => '2026-01-01 11:00:00'])
+            ->assertCanSeeTableRecords([$outbound])
+            ->assertCanNotSeeTableRecords([$later])
+            ->callAction('report');
+
+        $this->get(route('outbound-reports.filtered'))->assertOk()
+            ->assertSee('OUT-1')->assertSee('100.000')->assertDontSee('OUT-2')->assertDontSee('IN-1');
+        $this->get(route('outbound-reports.show', $outbound))->assertOk()->assertSee('OUT-1')->assertDontSee('OUT-2');
+        $this->get(route('outbound-reports.show', $inbound))->assertNotFound();
+    }
+
+    public function test_report_generation_records_actor_scope_and_included_records(): void
+    {
+        [$inbound, $outbound] = $this->movements();
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $this->get(route('inbound-reports.show', $inbound->shipment))->assertOk();
+        $entry = AuditEntry::where('subject_type', 'Inbound report')->where('action', 'generated')->sole();
+        $this->assertSame($user->id, $entry->actor_id);
+        $this->assertSame([$inbound->shipment_id], $entry->new_values['record_ids']);
+        $this->assertSame('single shipment', $entry->new_values['criteria']['scope']);
+
+        $this->get(route('outbound-reports.show', $outbound))->assertOk();
+        $entry = AuditEntry::where('subject_type', 'Outbound report')->where('action', 'generated')->sole();
+        $this->assertSame([$outbound->id], $entry->new_values['record_ids']);
+        $this->assertSame($user->name, $entry->actor_name);
+    }
+
+    public function test_received_percentage_badge_uses_shipment_progress_thresholds(): void
+    {
+        [$inbound] = $this->movements();
+        $shipment = $inbound->shipment;
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ListReports::class)
+            ->assertTableColumnExists('received_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'danger' && $column->getTooltip($column->getState()) === 'Below allowed range', $shipment);
+
+        $inbound->update(['quantity_ml' => 995000]);
+        Livewire::test(ListReports::class)
+            ->assertTableColumnExists('received_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'success' && $column->getTooltip($column->getState()) === 'Allowed range', $shipment);
+
+        $inbound->update(['quantity_ml' => 1001000]);
+        Livewire::test(ListReports::class)
+            ->assertTableColumnExists('received_percentage', fn (TextColumn $column): bool => $column->getColor($column->getState()) === 'warning' && $column->getTooltip($column->getState()) === 'Above allowed range', $shipment);
     }
 }

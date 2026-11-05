@@ -65,7 +65,7 @@ class Shipment extends Model
         return intdiv($basisPoints, 100).'.'.str_pad((string) ($basisPoints % 100), 2, '0', STR_PAD_LEFT).'%';
     }
 
-    private static function percentageBasisPoints(int $quantity, int $total): int
+    public static function percentageBasisPoints(int $quantity, int $total): int
     {
         if ($total <= 0) {
             return 0;

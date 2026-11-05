@@ -37,7 +37,7 @@ class ShipmentResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('reference')->label('Shipment reference')->searchable(), TextColumn::make('origin')->label('Point of origin')->searchable(), TextColumn::make('vessel.name')->label('Vessel'), TextColumn::make('commodity.code')->label('Commodity'), TextColumn::make('expected_ml')->label('Quantity (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3))])->recordActions([EditAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists()), DeleteAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists())]);
+        return $table->columns([TextColumn::make('reference')->label('Shipment reference')->formatStateUsing(fn (string $state): string => Str::limit($state, 7))->tooltip(fn (string $state): string => $state)->searchable(), TextColumn::make('origin')->label('Point of origin')->searchable(), TextColumn::make('vessel.name')->label('Vessel'), TextColumn::make('commodity.code')->label('Commodity'), TextColumn::make('expected_ml')->label('Quantity (L)')->formatStateUsing(fn ($state) => number_format($state / 1000, 3))])->recordActions([EditAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists()), DeleteAction::make()->visible(fn ($record) => ! Movement::where('shipment_id', $record->id)->exists())]);
     }
 
     public static function getPages(): array
