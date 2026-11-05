@@ -132,6 +132,33 @@ class CargoReportTest extends TestCase
         $this->get(route('inbound-reports.filtered'))->assertOk()->assertSee('SHIP-1')->assertDontSee('OTHER');
     }
 
+    public function test_inbound_reports_filter_shipments_by_inclusive_event_time(): void
+    {
+        [$inbound] = $this->movements();
+        $laterShipment = Shipment::factory()->create([
+            'reference' => 'SHIP-LATER',
+            'origin' => 'Later origin',
+            'vessel_id' => $inbound->shipment->vessel_id,
+            'commodity_id' => $inbound->commodity_id,
+            'expected_ml' => 1000000,
+        ]);
+        app(CargoService::class)->record([
+            'type' => 'inbound',
+            'event_reference' => 'IN-LATER',
+            'shipment_id' => $laterShipment->id,
+            'tank_id' => $inbound->tank_id,
+            'quantity_litres' => '10',
+            'occurred_at' => '2026-01-01 12:00:00',
+        ]);
+
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ListReports::class)
+            ->filterTable('event_time', ['from' => '2026-01-01 10:00:00', 'until' => '2026-01-01 10:00:00'])
+            ->assertCanSeeTableRecords([$inbound->shipment])
+            ->assertCanNotSeeTableRecords([$laterShipment]);
+    }
+
     public function test_inbound_report_requires_authentication(): void
     {
         [$inbound] = $this->movements();

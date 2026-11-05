@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Reports;
 use App\Filament\Resources\Reports\Pages\ListReports;
 use App\Models\Shipment;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -20,7 +21,7 @@ class ReportResource extends Resource
 
     protected static ?string $navigationLabel = 'Reports';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Cargo workflow';
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports & Audits';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
 
@@ -85,7 +86,34 @@ class ReportResource extends Resource
             self::reportTypeFilter('inbound'),
             SelectFilter::make('vessel')->relationship('vessel', 'name')->label('Ship')->searchable()->preload(),
             SelectFilter::make('commodity')->relationship('commodity', 'code')->searchable()->preload(),
-        ], layout: FiltersLayout::AboveContent)->deferFilters(false)->filtersFormColumns(3)
+            Filter::make('event_time')
+                ->schema([
+                    DateTimePicker::make('from')
+                        ->label('Start')
+                        ->native(false)
+                        ->displayFormat('d/m/y H:i:s')
+                        ->placeholder('DD/MM/YY HH:MM:SS')
+                        ->extraTriggerAttributes(['style' => 'font-size: 0.75rem; line-height: 1rem;'])
+                        ->seconds(),
+                    DateTimePicker::make('until')
+                        ->label('End')
+                        ->native(false)
+                        ->displayFormat('d/m/y H:i:s')
+                        ->placeholder('DD/MM/YY HH:MM:SS')
+                        ->extraTriggerAttributes(['style' => 'font-size: 0.75rem; line-height: 1rem;'])
+                        ->seconds(),
+                ])
+                ->columns(2)
+                ->query(function (Builder $query, array $data): Builder {
+                    if (! ($data['from'] ?? null) && ! ($data['until'] ?? null)) {
+                        return $query;
+                    }
+
+                    return $query->whereHas('inboundMovements', fn (Builder $inboundQuery): Builder => $inboundQuery
+                        ->when($data['from'] ?? null, fn (Builder $inboundQuery, string $from): Builder => $inboundQuery->where('occurred_at', '>=', $from))
+                        ->when($data['until'] ?? null, fn (Builder $inboundQuery, string $until): Builder => $inboundQuery->where('occurred_at', '<=', $until)));
+                }),
+        ], layout: FiltersLayout::AboveContent)->deferFilters(false)->filtersFormColumns(4)
             ->recordActions([
                 Action::make('report')->label('View report')->icon('heroicon-o-document-text')
                     ->url(fn (Shipment $record): string => route('inbound-reports.show', $record))->openUrlInNewTab(),
