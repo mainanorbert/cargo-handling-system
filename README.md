@@ -12,7 +12,7 @@ npm run build
 php artisan serve
 ```
 
-In the local environment the seeder creates `bulk_admin@gmail` with password `admin@2026`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Production operators are created directly in PostgreSQL as described below. Never use the demo credentials in production.
+In the local environment the seeder creates `bulk_admin@gmail.com` with password `admin@2026`. This account is for local demonstrations only; it is not seeded in production. Open `/admin` and sign in. Production operators are created directly in PostgreSQL as described below. Never use the demo credentials in production.
 
 ## Deploy to Render
 

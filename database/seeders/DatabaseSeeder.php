@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
         Shipment::firstOrCreate(['reference' => 'SHIP-DEMO-001'], ['origin' => 'Port of origin', 'vessel_id' => $vessel->id, 'commodity_id' => Commodity::where('code', 'CPO')->firstOrFail()->id, 'expected_ml' => 100000000]);
         if (app()->environment('local', 'testing')) {
             User::updateOrCreate(
-                ['email' => 'bulk_admin@gmail'],
+                ['email' => 'bulk_admin@gmail.com'],
                 ['name' => 'Bulk Admin', 'password' => 'admin@2026'],
             );
         }
