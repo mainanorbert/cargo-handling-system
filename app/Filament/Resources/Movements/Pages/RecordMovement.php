@@ -45,11 +45,67 @@ abstract class RecordMovement extends ManageRecords
             Select::make('shipment_id')->label('Inbound shipment')->options(fn () => Shipment::pluck('reference', 'id'))->searchable()->required()->live()->afterStateUpdated(function (Set $set, int|string|null $state): void {
                 $shipment = $this->findShipmentWithDischargeTotal($state);
                 $set('quantity_litres', $shipment ? $this->formatLitresForInput($shipment->remainingMillilitres()) : null);
+                $set('tank_id', null);
+            })->visible($type === 'inbound'),
+            Placeholder::make('shipment_commodity')->label('Shipment commodity')->content(function (Get $get): string {
+                $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
+
+                return $shipment?->commodity
+                    ? $shipment->commodity->code.' — '.$shipment->commodity->description
+                    : 'Select an inbound shipment to view its commodity.';
             })->visible($type === 'inbound'),
             Select::make('truck_id')->label('Cab plate')->options(fn () => Truck::pluck('can_plate', 'id'))->searchable()->required()->live()->visible($type === 'outbound'),
             Placeholder::make('trailer_plate')->label('Trailer plate')->content(fn (Get $get): string => Truck::find($get('truck_id'))?->trail_plate ?: 'No trailer plate recorded')->visible($type === 'outbound'),
             Select::make('commodity_id')->label('Commodity being transported')->options(fn () => Commodity::pluck('code', 'id'))->searchable()->required()->live()->afterStateUpdated(fn (Set $set) => $set('tank_id', null))->visible($type === 'outbound'),
-            Select::make('tank_id')->label('Shore tank')->options(fn (Get $get) => Tank::query()->when($type === 'outbound', fn (Builder $query) => $query->whereNotNull('commodity_id')->where('commodity_id', $get('commodity_id')))->get()->mapWithKeys(fn ($tank) => [$tank->id => $tank->name.' — '.number_format($tank->balance_ml / 1000, 3).' / '.number_format($tank->capacity_ml / 1000, 3).' L']))->searchable()->required()->live(),
+            Placeholder::make('tank_compatibility')->label('Tank compatibility')->content(function (Get $get) use ($type): string {
+                if ($type !== 'inbound') {
+                    return '';
+                }
+
+                $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
+
+                if (! $shipment?->commodity) {
+                    return 'Select an inbound shipment to compare its commodity with current tank contents.';
+                }
+
+                return Tank::query()
+                    ->with('commodity')
+                    ->orderBy('name')
+                    ->get()
+                    ->map(function (Tank $tank) use ($shipment): string {
+                        $commodity = $tank->commodity?->code ?? 'Empty';
+                        $availability = $tank->commodity_id === null || $tank->commodity_id === $shipment->commodity_id
+                            ? 'available'
+                            : 'unavailable — contains a different commodity';
+
+                        return $tank->name.' — '.$commodity.'; '.$this->formatLitres((int) $tank->balance_ml).' / '
+                            .$this->formatLitres((int) $tank->capacity_ml).' L; '.$availability;
+                    })
+                    ->join('; ')
+                    ?: 'No shore tanks have been configured.';
+            })->visible($type === 'inbound'),
+            Select::make('tank_id')->label('Shore tank')->options(function (Get $get) use ($type) {
+                $shipment = $type === 'inbound' ? $this->findShipmentWithDischargeTotal($get('shipment_id')) : null;
+
+                return Tank::query()
+                    ->with('commodity')
+                    ->when($type === 'inbound' && $shipment, fn (Builder $query) => $query->where(fn (Builder $query) => $query->whereNull('commodity_id')->orWhere('commodity_id', $shipment->commodity_id)))
+                    ->when($type === 'outbound', fn (Builder $query) => $query->whereNotNull('commodity_id')->where('commodity_id', $get('commodity_id')))
+                    ->orderBy('name')
+                    ->get()
+                    ->mapWithKeys(fn (Tank $tank) => [$tank->id => $tank->name.' — '.($tank->commodity?->code ?? 'Empty').'; '
+                        .$this->formatLitres((int) $tank->balance_ml).' / '.$this->formatLitres((int) $tank->capacity_ml).' L']);
+            })->helperText(function (Get $get) use ($type): ?string {
+                if ($type !== 'inbound') {
+                    return null;
+                }
+
+                $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
+
+                return $shipment?->commodity
+                    ? 'Only empty tanks or tanks already holding '.$shipment->commodity->code.' can receive this shipment.'
+                    : 'Choose a shipment to show compatible tanks.';
+            })->searchable()->required()->live(),
             TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->maxValue(function (Get $get) use ($type): float|string|null {
                 if ($type === 'inbound') {
                     $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
@@ -131,6 +187,7 @@ abstract class RecordMovement extends ManageRecords
         }
 
         return Shipment::query()
+            ->with('commodity')
             ->withSum('inboundMovements as discharged_ml', 'source_ml')
             ->find($shipmentId);
     }

@@ -267,7 +267,7 @@ class CargoWorkflowTest extends TestCase
         $this->assertDatabaseCount('trucks', 0);
     }
 
-    public function test_operator_registers_a_shipment_with_a_generated_unique_reference(): void
+    public function test_operator_registers_a_shipment_with_a_short_generated_reference(): void
     {
         $commodity = Commodity::create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
         $vessel = Vessel::create(['name' => 'Vessel']);
@@ -285,7 +285,29 @@ class CargoWorkflowTest extends TestCase
             ->assertHasNoActionErrors();
 
         $shipment = Shipment::where('origin', 'Port of origin')->sole();
-        $this->assertTrue(Str::isUuid(Str::after($shipment->reference, 'SHIP-')));
+        $this->assertMatchesRegularExpression('/^SHIP-[A-Z]{3}-\d{3}$/', $shipment->reference);
+    }
+
+    public function test_operator_cannot_register_a_shipment_with_an_invalid_reference_format(): void
+    {
+        $commodity = Commodity::create(['code' => 'CPO', 'description' => 'Crude Palm Oil']);
+        $vessel = Vessel::create(['name' => 'Vessel']);
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(ManageShipments::class)
+            ->mountAction('create')
+            ->setActionData([
+                'reference' => 'SHIP-DEMO-001',
+                'origin' => 'Port of origin',
+                'vessel_id' => $vessel->id,
+                'commodity_id' => $commodity->id,
+                'expected_ml' => '1000',
+            ])
+            ->callMountedAction()
+            ->assertHasActionErrors(['reference' => 'regex'])
+            ->assertMountedActionModalSee('Shipment reference must use the format SHIP-ABC-123.');
+
+        $this->assertDatabaseCount('shipments', 0);
     }
 
     public function test_logged_in_operator_sees_an_operations_link_instead_of_an_admin_login_link(): void
@@ -319,6 +341,27 @@ class CargoWorkflowTest extends TestCase
             ->assertHasNoActionErrors();
         $this->assertSame(1000000, $tank->fresh()->balance_ml);
         $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'inbound', 'loss_ml' => 0, 'quantity_ml' => 1000000, 'recorded_by_user_id' => $operator->id]);
+    }
+
+    public function test_discharge_form_shows_shipment_commodity_and_only_compatible_tanks(): void
+    {
+        [$shipment, $emptyTank] = $this->setupCargo();
+        $compatibleTank = Tank::create(['name' => 'Compatible', 'capacity_ml' => 1000000]);
+        $compatibleTank->forceFill(['commodity_id' => $shipment->commodity_id, 'balance_ml' => 500000])->save();
+        $otherCommodity = Commodity::create(['code' => 'PFAD', 'description' => 'Palm Fatty Acid Distillate']);
+        $incompatibleTank = Tank::create(['name' => 'Incompatible', 'capacity_ml' => 1000000]);
+        $incompatibleTank->forceFill(['commodity_id' => $otherCommodity->id, 'balance_ml' => 500000])->save();
+        $this->actingAs(User::factory()->create());
+
+        Livewire::test(RecordVesselDischarge::class)
+            ->mountAction('record')
+            ->setActionData(['shipment_id' => $shipment->id])
+            ->assertMountedActionModalSee('Shipment commodity')
+            ->assertMountedActionModalSee('CPO — Crude Palm Oil')
+            ->assertMountedActionModalSee('Tank compatibility')
+            ->assertMountedActionModalSee('Incompatible — PFAD; 500.000 / 1,000.000 L; unavailable — contains a different commodity')
+            ->assertMountedActionModalSee('Only empty tanks or tanks already holding CPO can receive this shipment.')
+            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => array_keys($component->getOptions()) === [$emptyTank->id, $compatibleTank->id]);
     }
 
     public function test_discharge_form_defaults_to_the_shipment_remaining_quantity_and_rejects_more(): void

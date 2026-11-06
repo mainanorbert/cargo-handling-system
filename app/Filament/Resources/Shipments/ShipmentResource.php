@@ -32,7 +32,17 @@ class ShipmentResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([TextInput::make('reference')->label('Shipment reference')->default(fn (): string => 'SHIP-'.Str::uuid())->required()->unique(ignoreRecord: true), TextInput::make('origin')->label('Point of origin')->required(), Select::make('vessel_id')->label('Vessel')->relationship('vessel', 'name')->searchable()->preload()->required(), Select::make('commodity_id')->label('Commodity')->relationship('commodity', 'code')->preload()->required(), TextInput::make('expected_ml')->label('Quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))]);
+        return $schema->components([TextInput::make('reference')->label('Shipment reference')->default(fn (): string => self::generateReference())->required()->unique(ignoreRecord: true)->regex('/^SHIP-[A-Z]{3}-\d{3}$/')->validationMessages(['regex' => 'Shipment reference must use the format SHIP-ABC-123.'])->helperText('Format: SHIP-ABC-123 (three letters and a three-digit number).'), TextInput::make('origin')->label('Point of origin')->required(), Select::make('vessel_id')->label('Vessel')->relationship('vessel', 'name')->searchable()->preload()->required(), Select::make('commodity_id')->label('Commodity')->relationship('commodity', 'code')->preload()->required(), TextInput::make('expected_ml')->label('Quantity (L)')->required()->numeric()->minValue(0.001)->step(0.001)->formatStateUsing(fn ($state) => $state === null ? null : number_format($state / 1000, 3, '.', ''))->dehydrateStateUsing(fn ($state) => CargoService::millilitres((string) $state))]);
+    }
+
+    private static function generateReference(): string
+    {
+        do {
+            $code = implode('', array_map(fn (): string => chr(random_int(65, 90)), range(1, 3)));
+            $reference = sprintf('SHIP-%s-%03d', $code, random_int(0, 999));
+        } while (Shipment::query()->where('reference', $reference)->exists());
+
+        return $reference;
     }
 
     public static function table(Table $table): Table

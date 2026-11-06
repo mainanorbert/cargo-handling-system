@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
         Truck::updateOrCreate(['registration' => 'KAA 123A'], ['can_plate' => 'CAB 123A', 'trail_plate' => 'TRL 456B']);
         Tank::firstOrCreate(['name' => 'Tank A'], ['capacity_ml' => 100000000]);
         Tank::firstOrCreate(['name' => 'Tank B'], ['capacity_ml' => 200000000]);
-        Shipment::firstOrCreate(['reference' => 'SHIP-DEMO-001'], ['origin' => 'Port of origin', 'vessel_id' => $vessel->id, 'commodity_id' => Commodity::where('code', 'CPO')->firstOrFail()->id, 'expected_ml' => 100000000]);
+        Shipment::firstOrCreate(['reference' => 'SHIP-DEM-001'], ['origin' => 'Port of origin', 'vessel_id' => $vessel->id, 'commodity_id' => Commodity::where('code', 'CPO')->firstOrFail()->id, 'expected_ml' => 100000000]);
         if (app()->environment('local', 'testing')) {
             User::updateOrCreate(
                 ['email' => 'bulk_admin@gmail.com'],
