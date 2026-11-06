@@ -46,44 +46,16 @@ abstract class RecordMovement extends ManageRecords
                 $shipment = $this->findShipmentWithDischargeTotal($state);
                 $set('quantity_litres', $shipment ? $this->formatLitresForInput($shipment->remainingMillilitres()) : null);
                 $set('tank_id', null);
-            })->visible($type === 'inbound'),
-            Placeholder::make('shipment_commodity')->label('Shipment commodity')->content(function (Get $get): string {
+            })->helperText(function (Get $get): ?string {
                 $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
 
                 return $shipment?->commodity
-                    ? $shipment->commodity->code.' — '.$shipment->commodity->description
-                    : 'Select an inbound shipment to view its commodity.';
+                    ? 'Commodity: '.$shipment->commodity->code
+                    : null;
             })->visible($type === 'inbound'),
             Select::make('truck_id')->label('Cab plate')->options(fn () => Truck::pluck('can_plate', 'id'))->searchable()->required()->live()->visible($type === 'outbound'),
             Placeholder::make('trailer_plate')->label('Trailer plate')->content(fn (Get $get): string => Truck::find($get('truck_id'))?->trail_plate ?: 'No trailer plate recorded')->visible($type === 'outbound'),
             Select::make('commodity_id')->label('Commodity being transported')->options(fn () => Commodity::pluck('code', 'id'))->searchable()->required()->live()->afterStateUpdated(fn (Set $set) => $set('tank_id', null))->visible($type === 'outbound'),
-            Placeholder::make('tank_compatibility')->label('Tank compatibility')->content(function (Get $get) use ($type): string {
-                if ($type !== 'inbound') {
-                    return '';
-                }
-
-                $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
-
-                if (! $shipment?->commodity) {
-                    return 'Select an inbound shipment to compare its commodity with current tank contents.';
-                }
-
-                return Tank::query()
-                    ->with('commodity')
-                    ->orderBy('name')
-                    ->get()
-                    ->map(function (Tank $tank) use ($shipment): string {
-                        $commodity = $tank->commodity?->code ?? 'Empty';
-                        $availability = $tank->commodity_id === null || $tank->commodity_id === $shipment->commodity_id
-                            ? 'available'
-                            : 'unavailable — contains a different commodity';
-
-                        return $tank->name.' — '.$commodity.'; '.$this->formatLitres((int) $tank->balance_ml).' / '
-                            .$this->formatLitres((int) $tank->capacity_ml).' L; '.$availability;
-                    })
-                    ->join('; ')
-                    ?: 'No shore tanks have been configured.';
-            })->visible($type === 'inbound'),
             Select::make('tank_id')->label('Shore tank')->options(function (Get $get) use ($type) {
                 $shipment = $type === 'inbound' ? $this->findShipmentWithDischargeTotal($get('shipment_id')) : null;
 
@@ -100,11 +72,11 @@ abstract class RecordMovement extends ManageRecords
                     return null;
                 }
 
-                $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
+                $tank = $this->findTank($get('tank_id'));
 
-                return $shipment?->commodity
-                    ? 'Only empty tanks or tanks already holding '.$shipment->commodity->code.' can receive this shipment.'
-                    : 'Choose a shipment to show compatible tanks.';
+                return $tank?->commodity
+                    ? 'Current contents: '.$tank->commodity->code
+                    : ($tank ? 'Current contents: Empty' : null);
             })->searchable()->required()->live(),
             TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->maxValue(function (Get $get) use ($type): float|string|null {
                 if ($type === 'inbound') {
@@ -198,7 +170,7 @@ abstract class RecordMovement extends ManageRecords
             return null;
         }
 
-        return Tank::find($tankId);
+        return Tank::query()->with('commodity')->find($tankId);
     }
 
     private function formatLitres(int $millilitres): string

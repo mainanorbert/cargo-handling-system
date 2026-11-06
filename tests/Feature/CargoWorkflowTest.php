@@ -356,12 +356,12 @@ class CargoWorkflowTest extends TestCase
         Livewire::test(RecordVesselDischarge::class)
             ->mountAction('record')
             ->setActionData(['shipment_id' => $shipment->id])
-            ->assertMountedActionModalSee('Shipment commodity')
-            ->assertMountedActionModalSee('CPO — Crude Palm Oil')
-            ->assertMountedActionModalSee('Tank compatibility')
-            ->assertMountedActionModalSee('Incompatible — PFAD; 500.000 / 1,000.000 L; unavailable — contains a different commodity')
-            ->assertMountedActionModalSee('Only empty tanks or tanks already holding CPO can receive this shipment.')
-            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => array_keys($component->getOptions()) === [$emptyTank->id, $compatibleTank->id]);
+            ->assertMountedActionModalSee('Commodity: CPO')
+            ->assertSchemaComponentExists('tank_id', checkComponentUsing: fn (Select $component): bool => array_keys($component->getOptions()) === [$emptyTank->id, $compatibleTank->id])
+            ->setActionData(['tank_id' => $emptyTank->id])
+            ->assertMountedActionModalSee('Current contents: Empty')
+            ->setActionData(['tank_id' => $compatibleTank->id])
+            ->assertMountedActionModalSee('Current contents: CPO');
     }
 
     public function test_discharge_form_defaults_to_the_shipment_remaining_quantity_and_rejects_more(): void
