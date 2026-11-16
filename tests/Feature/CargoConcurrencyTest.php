@@ -61,7 +61,7 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\TankCapacityException', 'applied'], $results);
-        $this->assertSame(100000000, $tank->fresh()->balance_ml);
+        $this->assertSame(99500000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -77,7 +77,7 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\CargoException', 'applied'], $results);
-        $this->assertSame(100000000, (int) Tank::sum('balance_ml'));
+        $this->assertSame(99500000, (int) Tank::sum('balance_ml'));
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -93,7 +93,7 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\ShipmentQuantityExceededException', 'applied'], $results);
-        $this->assertSame(100000000, (int) Tank::sum('balance_ml'));
+        $this->assertSame(99500000, (int) Tank::sum('balance_ml'));
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -111,7 +111,7 @@ class CargoConcurrencyTest extends TestCase
 
         sort($results);
         $this->assertSame(['App\\Exceptions\\CargoException', 'applied'], $results);
-        $this->assertSame(40000000, $tank->fresh()->balance_ml);
+        $this->assertSame(39500000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 2);
     }
 

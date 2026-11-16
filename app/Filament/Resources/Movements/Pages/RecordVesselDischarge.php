@@ -59,7 +59,7 @@ class RecordVesselDischarge extends RecordMovement
                         Section::make('Shipment progress')
                             ->schema([
                                 TextEntry::make('reference')->label('Shipment reference'),
-                                TextEntry::make('expected_ml')->label('Net quantity before discharge (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
+                                TextEntry::make('expected_ml')->label('Source shipment quantity (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
                                 TextEntry::make('discharged_ml')->label('Offloaded so far (L)')->state(fn (Shipment $record): int => $record->dischargedMillilitres())->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
                                 TextEntry::make('remaining_ml')->label('Remaining (L)')->state(fn (Shipment $record): int => $record->remainingMillilitres())->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
                                 TextEntry::make('discharge_percentage')->label('Offloaded')->state(fn (Shipment $record): string => $record->formattedDischargePercentage())->badge()->color(fn (Shipment $record): string => $this->offloadedStatusColor($record))->tooltip(fn (Shipment $record): string => $this->offloadedStatusTooltip($record)),
@@ -73,10 +73,12 @@ class RecordVesselDischarge extends RecordMovement
                                         TextEntry::make('event_reference')->label('Event reference')->wrap(),
                                         TextEntry::make('tank.name')->label('Tank'),
                                         TextEntry::make('source_ml')->label('Discharged quantity (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
+                                        TextEntry::make('loss_ml')->label('Loss (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
+                                        TextEntry::make('quantity_ml')->label('Received in tank (L)')->formatStateUsing(fn ($state): string => number_format($state / 1000, 3)),
                                         TextEntry::make('occurred_at')->label('Event time')->dateTime('d M Y H:i'),
                                         TextEntry::make('recordedBy.name')->label('Recorded by')->placeholder('System / integration'),
                                     ])
-                                    ->columns(5),
+                                    ->columns(3),
                             ]),
                     ])
                     ->iconButton()

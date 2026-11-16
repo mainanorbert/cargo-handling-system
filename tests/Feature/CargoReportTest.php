@@ -108,13 +108,13 @@ class CargoReportTest extends TestCase
 
         Livewire::test(ListReports::class)
             ->assertCanSeeTableRecords([$shipment])
-            ->assertSee('600.125')
-            ->assertSee('60.01%')
+            ->assertSee('597.124')
+            ->assertSee('59.71%')
             ->assertDontSee('IN-1');
 
         $this->get(route('inbound-reports.show', $shipment))->assertOk()
             ->assertSee('SHIP-1')->assertSee('IN-1')->assertSee('IN-2')
-            ->assertSee('600.125')->assertSee('60.01%');
+            ->assertSee('597.124')->assertSee('59.71%');
     }
 
     public function test_filtered_inbound_report_only_includes_matching_shipments(): void

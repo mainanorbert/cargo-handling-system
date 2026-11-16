@@ -15,11 +15,13 @@ use Illuminate\Support\Facades\Validator;
 
 class CargoService
 {
+    public const INBOUND_LOSS_BASIS_POINTS = 50;
+
     /** Convert litres to integer millilitres, rejecting invalid or excessive precision. */
     public static function millilitres(string $litres): int
     {
         if (! preg_match('/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,3})?$/', $litres)) {
-            throw new CargoException('Enter a valid quantity in litres with at most three decimal places.');
+            throw new CargoException('Quantity format is invalid. Enter litres without commas and with at most three decimal places (for example, 1000 or 1000.125).');
         }
         [$whole, $fraction] = array_pad(explode('.', $litres, 2), 2, '');
         $amount = (int) $whole * 1000 + (int) str_pad($fraction, 3, '0');
@@ -28,6 +30,20 @@ class CargoService
         }
 
         return $amount;
+    }
+
+    /** @return array{source_ml: int, loss_ml: int, received_ml: int, loss_basis_points: int} */
+    public static function inboundQuantities(string $litres): array
+    {
+        $sourceMl = self::millilitres($litres);
+        $lossMl = intdiv($sourceMl * self::INBOUND_LOSS_BASIS_POINTS + 5000, 10000);
+
+        return [
+            'source_ml' => $sourceMl,
+            'loss_ml' => $lossMl,
+            'received_ml' => $sourceMl - $lossMl,
+            'loss_basis_points' => self::INBOUND_LOSS_BASIS_POINTS,
+        ];
     }
 
     /** @param array<string, mixed> $data */
@@ -98,15 +114,16 @@ class CargoService
                 foreach ($events as $event) {
                     $inbound = $event['type'] === 'inbound';
                     $shipment = $inbound ? $shipments->get($event['shipment_id']) : null;
-                    $quantity = self::millilitres($event['quantity_litres']);
-                    if ($shipment && $quantity > $remainingByShipment[$shipment->id]) {
+                    $quantities = $inbound ? self::inboundQuantities($event['quantity_litres']) : null;
+                    $sourceMl = $quantities['source_ml'] ?? self::millilitres($event['quantity_litres']);
+                    if ($shipment && $sourceMl > $remainingByShipment[$shipment->id]) {
                         throw new ShipmentQuantityExceededException(
                             'Quantity cannot exceed the amount remaining in the selected shipment ('
                             .number_format($remainingByShipment[$shipment->id] / 1000, 3).' L remains).'
                         );
                     }
                     if ($shipment) {
-                        $remainingByShipment[$shipment->id] -= $quantity;
+                        $remainingByShipment[$shipment->id] -= $sourceMl;
                     }
                     $newMovements[] = new Movement([
                         'event_reference' => $event['event_reference'],
@@ -115,8 +132,9 @@ class CargoService
                         'commodity_id' => $inbound ? $shipment?->commodity_id : ($event['commodity_id'] ?? null),
                         'shipment_id' => $shipment?->id,
                         'truck_id' => $inbound ? null : $event['truck_id'],
-                        'source_ml' => $quantity, 'loss_ml' => 0,
-                        'quantity_ml' => $quantity, 'loss_basis_points' => 0,
+                        'source_ml' => $sourceMl, 'loss_ml' => $quantities['loss_ml'] ?? 0,
+                        'quantity_ml' => $quantities['received_ml'] ?? $sourceMl,
+                        'loss_basis_points' => $quantities['loss_basis_points'] ?? 0,
                         'occurred_at' => Carbon::parse($event['occurred_at'])->setTimezone(config('app.timezone'))->startOfSecond()->toDateTimeString(),
                         'received_at' => now(),
                         'recorded_by_user_id' => $recordedByUserId,

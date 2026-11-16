@@ -78,13 +78,7 @@ abstract class RecordMovement extends ManageRecords
                     ? 'Current contents: '.$tank->commodity->code
                     : ($tank ? 'Current contents: Empty' : null);
             })->searchable()->required()->live(),
-            TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->maxValue(function (Get $get) use ($type): float|string|null {
-                if ($type === 'inbound') {
-                    $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
-
-                    return $shipment ? $this->formatLitresForInput($shipment->remainingMillilitres()) : null;
-                }
-
+            TextInput::make('quantity_litres')->label($type === 'inbound' ? 'Discharged quantity (L)' : 'Delivery quantity (L)')->required()->numeric()->minValue(0.001)->maxValue(function (Get $get) use ($type): ?string {
                 if ($type === 'outbound') {
                     $tank = $this->findTank($get('tank_id'));
 
@@ -93,9 +87,7 @@ abstract class RecordMovement extends ManageRecords
 
                 return null;
             })->validationMessages([
-                'max' => $type === 'inbound'
-                    ? 'Quantity cannot exceed the amount remaining in the selected shipment.'
-                    : 'Quantity cannot exceed the available stock in the selected tank.',
+                'max' => 'Quantity cannot exceed the available stock in the selected tank.',
             ])->step(0.001)->live(onBlur: true)->helperText(function (Get $get) use ($type): HtmlString|string|null {
                 if ($type === 'outbound') {
                     return null;
@@ -111,6 +103,12 @@ abstract class RecordMovement extends ManageRecords
                     .$this->formatLitres($shipment->dischargedMillilitres()).' L ('.$shipment->formattedDischargePercentage().')</span>'
                 );
             }),
+            Placeholder::make('inbound_preview')->label('Inbound loss and projected tank stock')
+                ->content(fn (Get $get): string => $this->inboundPreview($get))
+                ->visible($type === 'inbound'),
+            Placeholder::make('outbound_preview')->label('Projected tank stock')
+                ->content(fn (Get $get): string => $this->outboundPreview($get))
+                ->visible($type === 'outbound'),
             DateTimePicker::make('occurred_at')->label('Event time')->required()->default(now()),
         ];
     }
@@ -142,6 +140,7 @@ abstract class RecordMovement extends ManageRecords
                     try {
                         app(CargoService::class)->record([...$data, 'type' => $this->getMovementType(), 'event_reference' => $this->eventReference]);
                     } catch (CargoException $exception) {
+                        Notification::make()->title('Movement rejected')->body($exception->getMessage())->danger()->persistent()->send();
                         throw ValidationException::withMessages([
                             $this->getMountedActionSchema()->getStatePath().'.quantity_litres' => $exception->getMessage(),
                         ]);
@@ -171,6 +170,69 @@ abstract class RecordMovement extends ManageRecords
         }
 
         return Tank::query()->with('commodity')->find($tankId);
+    }
+
+    private function inboundPreview(Get $get): string
+    {
+        $shipment = $this->findShipmentWithDischargeTotal($get('shipment_id'));
+        $tank = $this->findTank($get('tank_id'));
+        $litres = $get('quantity_litres');
+        if (blank($litres)) {
+            return 'Enter a discharge quantity to preview the 0.5% transit loss.';
+        }
+
+        try {
+            $quantities = CargoService::inboundQuantities((string) $litres);
+        } catch (CargoException $exception) {
+            return $exception->getMessage();
+        }
+
+        $preview = 'Source: '.$this->formatLitres($quantities['source_ml']).' L; loss (0.5%): '
+            .$this->formatLitres($quantities['loss_ml']).' L; received: '
+            .$this->formatLitres($quantities['received_ml']).' L.';
+        if ($shipment && $quantities['source_ml'] > $shipment->remainingMillilitres()) {
+            $preview .= ' Exceeds shipment remaining quantity ('
+                .$this->formatLitres($shipment->remainingMillilitres()).' L source available).';
+        }
+        if (! $tank) {
+            return $preview.' Select a shore tank to preview its balance.';
+        }
+
+        $projectedMl = (int) $tank->balance_ml + $quantities['received_ml'];
+        $capacityMl = (int) $tank->capacity_ml;
+
+        return $preview.' Projected tank stock: '.$this->formatLitres($projectedMl).' / '
+            .$this->formatLitres($capacityMl).' L'
+            .($projectedMl > $capacityMl
+                ? ' — exceeds tank available capacity ('.$this->formatLitres($capacityMl - (int) $tank->balance_ml).' L).'
+                : '.');
+    }
+
+    private function outboundPreview(Get $get): string
+    {
+        $tank = $this->findTank($get('tank_id'));
+        if (! $tank) {
+            return 'Select a shore tank to preview its balance.';
+        }
+
+        $availableMl = (int) $tank->balance_ml;
+        $litres = $get('quantity_litres');
+        if (blank($litres)) {
+            return 'Available stock: '.$this->formatLitres($availableMl).' L. Enter a delivery quantity to preview the balance.';
+        }
+
+        try {
+            $quantityMl = CargoService::millilitres((string) $litres);
+        } catch (CargoException $exception) {
+            return $exception->getMessage();
+        }
+
+        if ($quantityMl > $availableMl) {
+            return 'Available stock: '.$this->formatLitres($availableMl).' L; delivery exceeds available stock and will be rejected.';
+        }
+
+        return 'Available stock: '.$this->formatLitres($availableMl).' L; projected tank stock: '
+            .$this->formatLitres($availableMl - $quantityMl).' L. No inbound transit loss applies to delivery.';
     }
 
     private function formatLitres(int $millilitres): string

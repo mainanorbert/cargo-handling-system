@@ -47,15 +47,31 @@ class CargoWorkflowTest extends TestCase
         return app(CargoService::class)->record(['type' => 'inbound', 'event_reference' => $reference, 'shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => $quantity, 'occurred_at' => $date]);
     }
 
-    public function test_inbound_discharge_and_delivery_update_stock_without_automatic_loss(): void
+    public function test_inbound_discharge_applies_half_percent_loss_before_delivery(): void
     {
         [$shipment, $tank, $truck] = $this->setupCargo();
         $movement = $this->inbound($shipment, $tank);
-        $this->assertSame(0, $movement->loss_ml);
-        $this->assertSame(100000000, $movement->quantity_ml);
-        $this->assertSame(100000000, $tank->fresh()->balance_ml);
-        app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'E2', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00']);
+        $this->assertSame(100000000, $movement->source_ml);
+        $this->assertSame(500000, $movement->loss_ml);
+        $this->assertSame(99500000, $movement->quantity_ml);
+        $this->assertSame(50, $movement->loss_basis_points);
         $this->assertSame(99500000, $tank->fresh()->balance_ml);
+        app(CargoService::class)->record(['type' => 'outbound', 'event_reference' => 'E2', 'truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '500', 'occurred_at' => '2026-01-01 11:00:00']);
+        $this->assertSame(99000000, $tank->fresh()->balance_ml);
+    }
+
+    public function test_inbound_loss_rounds_half_up_to_a_millilitre_and_exact_received_capacity_is_allowed(): void
+    {
+        [$shipment, $tank] = $this->setupCargo();
+        $shipment->update(['expected_ml' => 100]);
+        $tank->update(['capacity_ml' => 99]);
+
+        $movement = $this->inbound($shipment, $tank, 'ROUNDING', '0.100');
+
+        $this->assertSame(100, $movement->source_ml);
+        $this->assertSame(1, $movement->loss_ml);
+        $this->assertSame(99, $movement->quantity_ml);
+        $this->assertSame(99, $tank->fresh()->balance_ml);
     }
 
     public function test_shipment_can_be_split_across_tanks_without_exceeding_original_quantity_and_table_shows_allocated_tanks(): void
@@ -82,8 +98,8 @@ class CargoWorkflowTest extends TestCase
 
         $this->inbound($shipment, $otherTank, 'TANK-B', '100', '2026-01-01 11:00:00');
 
-        $this->assertSame(900000, $tank->fresh()->balance_ml);
-        $this->assertSame(100000, $otherTank->fresh()->balance_ml);
+        $this->assertSame(895500, $tank->fresh()->balance_ml);
+        $this->assertSame(99500, $otherTank->fresh()->balance_ml);
         $this->assertSame(1000000, $shipment->dischargedMillilitres());
         $this->assertSame(0, $shipment->remainingMillilitres());
         $this->assertSame('100.00%', $shipment->formattedDischargePercentage());
@@ -95,13 +111,13 @@ class CargoWorkflowTest extends TestCase
             $this->assertSame('Quantity cannot exceed the amount remaining in the selected shipment (0.000 L remains).', $exception->getMessage());
         }
 
-        $this->assertSame(100000, $otherTank->fresh()->balance_ml);
+        $this->assertSame(99500, $otherTank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 2);
 
         $this->actingAs(User::factory()->create());
 
         $page = Livewire::test(RecordVesselDischarge::class)
-            ->assertTableColumnExists('reference', fn (TextColumn $column): bool => $column->formatState($column->getState()) === 'SHIP-DE', $shipment)
+            ->assertTableColumnExists('reference', fn (TextColumn $column): bool => $column->formatState($column->getState()) === 'SHIP-DE...', $shipment)
             ->assertTableColumnExists('expected_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Shipped Qty' && $column->getSize($column->getState()) === TextSize::ExtraSmall && $column->getWidth() === '17%', $shipment)
             ->assertTableColumnExists('discharged_ml', fn (TextColumn $column): bool => $column->getLabel() === 'Offloaded' && $column->getWidth() === '16%', $shipment)
             ->assertTableColumnExists('discharge_percentage', fn (TextColumn $column): bool => $column->getLabel() === 'Offloaded (%)' && $column->getWidth() === '13%', $shipment)
@@ -117,7 +133,9 @@ class CargoWorkflowTest extends TestCase
             ->assertMountedActionModalSee('SHIP-DEMO-001')
             ->assertMountedActionModalSee('Discharged quantity (L)')
             ->assertMountedActionModalSee('900.000')
-            ->assertMountedActionModalSee('100.000');
+            ->assertMountedActionModalSee('100.000')
+            ->assertMountedActionModalSee('Loss (L)')
+            ->assertMountedActionModalSee('Received in tank (L)');
 
         $this->assertTrue($page->instance()->getTable()->isStackedOnMobile());
         $this->assertSame('vessel-discharge-table', $page->instance()->getTable()->getExtraAttributes()['class']);
@@ -174,7 +192,7 @@ class CargoWorkflowTest extends TestCase
         [$shipment, $tank] = $this->setupCargo();
         $shipment->update(['expected_ml' => 101000000]);
         try {
-            $this->inbound($shipment, $tank, 'E1', '100001');
+            $this->inbound($shipment, $tank, 'E1', '100503');
             $this->fail('Expected overflow');
         } catch (TankCapacityException) {
         }
@@ -188,7 +206,7 @@ class CargoWorkflowTest extends TestCase
         $this->inbound($shipment, $tank, 'B', '1000');
         $late = $this->inbound($shipment, $tank, 'A', '1000');
         $this->assertSame('applied', $late->status);
-        $this->assertSame(2000000, $tank->fresh()->balance_ml);
+        $this->assertSame(1990000, $tank->fresh()->balance_ml);
     }
 
     public function test_invalid_and_duplicate_events_do_not_change_stock(): void
@@ -202,7 +220,7 @@ class CargoWorkflowTest extends TestCase
             } catch (CargoException) {
             }
         }
-        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertSame(995000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -222,7 +240,7 @@ class CargoWorkflowTest extends TestCase
             $this->fail('Expected insufficient stock');
         } catch (CargoException) {
         }
-        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertSame(995000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -336,11 +354,13 @@ class CargoWorkflowTest extends TestCase
         $page
             ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '1000', 'occurred_at' => '2026-01-01 10:00:00'])
             ->assertMountedActionModalSee('Original quantity: 100,000.000 L; offloaded: 0.000 L (0.00%)')
+            ->assertMountedActionModalSee('loss (0.5%): 5.000 L; received: 995.000 L')
+            ->assertMountedActionModalSee('Projected tank stock: 995.000 / 100,000.000 L')
             ->assertMountedActionModalSeeHtml('style="font-size: 0.6875rem; line-height: 1rem;"')
             ->callMountedAction()
             ->assertHasNoActionErrors();
-        $this->assertSame(1000000, $tank->fresh()->balance_ml);
-        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'inbound', 'loss_ml' => 0, 'quantity_ml' => 1000000, 'recorded_by_user_id' => $operator->id]);
+        $this->assertSame(995000, $tank->fresh()->balance_ml);
+        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'inbound', 'source_ml' => 1000000, 'loss_ml' => 5000, 'quantity_ml' => 995000, 'loss_basis_points' => 50, 'recorded_by_user_id' => $operator->id]);
     }
 
     public function test_discharge_form_shows_shipment_commodity_and_only_compatible_tanks(): void
@@ -378,13 +398,16 @@ class CargoWorkflowTest extends TestCase
 
         $page
             ->assertActionDataSet(['shipment_id' => $shipment->id, 'quantity_litres' => '100.000'])
+            ->assertSchemaComponentExists('quantity_litres', checkComponentUsing: fn (TextInput $component): bool => $component->getMaxValue() === null)
             ->assertMountedActionModalSee('Original quantity: 1,000.000 L; offloaded: 900.000 L (90.00%)')
             ->assertMountedActionModalDontSee('remaining:')
-            ->assertMountedActionModalDontSee('After this entry:')
+            ->assertMountedActionModalSee('loss (0.5%): 0.500 L; received: 99.500 L')
             ->setActionData(['tank_id' => $otherTank->id, 'quantity_litres' => '101', 'occurred_at' => '2026-01-01 11:00:00'])
+            ->assertMountedActionModalSee('Exceeds shipment remaining quantity (100.000 L source available).')
             ->callMountedAction()
             ->assertHasActionErrors(['quantity_litres'])
-            ->assertMountedActionModalSee('Quantity cannot exceed the amount remaining in the selected shipment.');
+            ->assertNotified('Movement rejected')
+            ->assertMountedActionModalSee('Quantity cannot exceed the amount remaining in the selected shipment (100.000 L remains).');
 
         $this->assertSame(0, $otherTank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
@@ -432,7 +455,7 @@ class CargoWorkflowTest extends TestCase
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertSame(500000, $tank->fresh()->balance_ml);
+        $this->assertSame(495000, $tank->fresh()->balance_ml);
         $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'type' => 'outbound', 'loss_ml' => 0]);
     }
 
@@ -467,9 +490,11 @@ class CargoWorkflowTest extends TestCase
         $this->assertTrue(Str::isUuid($reference));
 
         $page
-            ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '100001', 'occurred_at' => '2026-01-01 10:00:00'])
+            ->setActionData(['shipment_id' => $shipment->id, 'tank_id' => $tank->id, 'quantity_litres' => '100503', 'occurred_at' => '2026-01-01 10:00:00'])
+            ->assertMountedActionModalSee('exceeds tank available capacity (100,000.000 L).')
             ->callMountedAction()
             ->assertHasActionErrors(['quantity_litres'])
+            ->assertNotified('Movement rejected')
             ->assertMountedActionModalSee('Quantity cannot exceed the available capacity of tank "A" (100,000.000 L available).')
             ->assertSet('eventReference', $reference);
 
@@ -480,7 +505,7 @@ class CargoWorkflowTest extends TestCase
             ->callMountedAction()
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'quantity_ml' => 1000000]);
+        $this->assertDatabaseHas('movements', ['event_reference' => $reference, 'quantity_ml' => 995000]);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -496,12 +521,11 @@ class CargoWorkflowTest extends TestCase
 
         $page
             ->setActionData(['truck_id' => $truck->id, 'tank_id' => $tank->id, 'quantity_litres' => '1001', 'occurred_at' => '2026-01-01 11:00:00'])
-            ->assertMountedActionModalSee('Delivery exceeds available tank stock of 1,000.000 L.')
+            ->assertMountedActionModalSee('delivery exceeds available stock and will be rejected.')
             ->callMountedAction()
-            ->assertHasActionErrors(['quantity_litres'])
-            ->assertMountedActionModalSee('must not be greater than 1000.000');
+            ->assertHasActionErrors(['quantity_litres']);
 
-        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertSame(995000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 
@@ -514,14 +538,14 @@ class CargoWorkflowTest extends TestCase
         $page = Livewire::test(RecordTruckDelivery::class)
             ->mountAction('record')
             ->setActionData(['tank_id' => $tank->id])
-            ->assertSchemaComponentExists('quantity_litres', checkComponentUsing: fn (TextInput $component): bool => $component->getMaxValue() === '1000.000');
+            ->assertSchemaComponentExists('quantity_litres', checkComponentUsing: fn (TextInput $component): bool => $component->getMaxValue() === '995.000');
 
         $page
             ->setActionData(['truck_id' => $truck->id, 'quantity_litres' => '1000.001', 'occurred_at' => '2026-01-01 11:00:00'])
             ->callMountedAction()
             ->assertHasActionErrors(['quantity_litres']);
 
-        $this->assertSame(1000000, $tank->fresh()->balance_ml);
+        $this->assertSame(995000, $tank->fresh()->balance_ml);
         $this->assertDatabaseCount('movements', 1);
     }
 

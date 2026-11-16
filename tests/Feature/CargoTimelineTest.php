@@ -42,8 +42,8 @@ class CargoTimelineTest extends TestCase
         $shipment->update(['expected_ml' => 200000000]);
         $service = app(CargoService::class);
         $events = [
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '100000', '2026-01-01 12:00:00'),
-            $this->event($shipment, $tank, $truck, 'outbound', 'B', '100000', '2026-01-01 10:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '99500', '2026-01-01 12:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'B', '99500', '2026-01-01 10:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'A', '100000', '2026-01-01 10:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'D', '100000', '2026-01-01 11:00:00'),
         ];
@@ -61,11 +61,11 @@ class CargoTimelineTest extends TestCase
         [$shipment, $tank, $truck] = $this->cargo();
         $service = app(CargoService::class);
         $service->record($this->event($shipment, $tank, $truck, 'inbound', 'A', '1000', '2026-01-01 10:00:00'));
-        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'D', '1000', '2026-01-01 13:00:00'));
+        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'D', '995', '2026-01-01 13:00:00'));
         $history = Movement::all()->toArray();
 
         $service->recordBatch([
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '1000', '2026-01-01 12:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '995', '2026-01-01 12:00:00'),
             $this->event($shipment, $tank, $truck, 'inbound', 'B', '1000', '2026-01-01 11:00:00'),
         ]);
 
@@ -80,10 +80,10 @@ class CargoTimelineTest extends TestCase
         $shipment->update(['expected_ml' => 101000000]);
         $service = app(CargoService::class);
         $service->record($this->event($shipment, $tank, $truck, 'inbound', 'A', '100000', '2026-01-01 10:00:00'));
-        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'C', '100000', '2026-01-01 12:00:00'));
+        $service->record($this->event($shipment, $tank, $truck, 'outbound', 'C', '99500', '2026-01-01 12:00:00'));
 
         try {
-            $service->record($this->event($shipment, $tank, $truck, 'inbound', 'B', '1', '2026-01-01 11:00:00'));
+            $service->record($this->event($shipment, $tank, $truck, 'inbound', 'B', '1000', '2026-01-01 11:00:00'));
             $this->fail('Expected a historical capacity conflict.');
         } catch (TankCapacityException) {
             $this->assertSame(0, $tank->fresh()->balance_ml);
@@ -102,7 +102,7 @@ class CargoTimelineTest extends TestCase
             $service->record($this->event($shipment, $tank, $truck, 'outbound', 'B', '101', '2026-01-01 11:00:00'));
             $this->fail('Expected a historical stock conflict.');
         } catch (CargoException) {
-            $this->assertSame(100000, $tank->fresh()->balance_ml);
+            $this->assertSame(95000, $tank->fresh()->balance_ml);
             $this->assertDatabaseCount('movements', 2);
         }
     }
@@ -130,7 +130,7 @@ class CargoTimelineTest extends TestCase
         $service = app(CargoService::class);
         $service->recordBatch([
             $this->event($shipment, $tank, $truck, 'inbound', 'A', '1000', '2026-01-01 10:00:00'),
-            $this->event($shipment, $tank, $truck, 'outbound', 'C', '1000', '2026-01-01 11:00:00'),
+            $this->event($shipment, $tank, $truck, 'outbound', 'C', '995', '2026-01-01 11:00:00'),
             $this->event($otherShipment, $tank, $truck, 'inbound', 'D', '1000', '2026-01-01 12:00:00'),
         ]);
 
@@ -138,7 +138,7 @@ class CargoTimelineTest extends TestCase
             $service->record($this->event($shipment, $tank, $truck, 'inbound', 'B', '1', '2026-01-01 10:30:00'));
             $this->fail('Expected a historical commodity conflict.');
         } catch (CargoException) {
-            $this->assertSame(1000000, $tank->fresh()->balance_ml);
+            $this->assertSame(995000, $tank->fresh()->balance_ml);
             $this->assertSame($otherCommodity->id, $tank->fresh()->commodity_id);
             $this->assertDatabaseCount('movements', 3);
         }
